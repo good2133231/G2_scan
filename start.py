@@ -19,10 +19,12 @@ import shutil
 import tldextract
 import re
 import signal
-
+import requests
+from datetime import datetime
+import random
 # ------------------------------------
 # 命令模板和配置
-if '-test' in sys.argv:
+if '-small' in sys.argv:
     print("[*] 使用测试环境命令模板")
     AFROG_CMD_TEMPLATE = "./afrog -T {target_file} -c 100 -rl 300 -timeout 2 -s spring -doh -json {output_file}"
     FSCAN_CMD_TEMPLATE = "./fscan -hf {target_file} -p 80 -np -nobr -t 600 -mt 100 -o {output_file}"
@@ -32,6 +34,9 @@ else:
     AFROG_CMD_TEMPLATE = "./afrog -T {target_file} -c 100 -rl 300 -timeout 2 -S high,info -doh -json {output_file}"
     FSCAN_CMD_TEMPLATE = "./fscan -hf {target_file} -p all -np -nobr -t 600 -mt 100 -o {output_file}"
     DEBUG_FSCAN = True
+ONLY_DOMAIN_MODE = '-test' in sys.argv
+if ONLY_DOMAIN_MODE:
+    print("[*] 仅处理域名模式 (-test)，将跳过安全扫描任务")
 SKIP_CURRENT_DOMAIN = False
 RESULT_JSON_PATH = "log/result_all.json"
 CDN_LIST_PATH = "file/cdn.txt"
@@ -46,7 +51,10 @@ def handle_sigint(signum, frame):
     global SKIP_CURRENT_DOMAIN
     print("\n[!] 收到 Ctrl+C，跳过当前域名，继续下一个...")
     SKIP_CURRENT_DOMAIN = True
-
+def headers_lib():
+    return {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    }
 def handle_sigquit(signum, frame):
     print("\n[!] 收到 Ctrl+\\，终止整个程序")
     sys.exit(0)
@@ -61,15 +69,53 @@ def is_domain_resolvable(domain):
         dns_cache[domain] = False
         return False
 # ------------------------------------
-# 异步IP反查函数
 def reverse_lookup_ip_sync(ip):
+    print("[>] 使用 dnsdblookup 反查域名接口")
+    # 备用用 ip138 获取绑定域名（ip138 不提供API，这里只是简单爬取）
     try:
-        domains = RapidDns.sameip(ip)
-        return ip, domains
-    except Exception as e:
-        print(f"[!] 反查失败: {ip}, 错误: {e}")
-        return ip, None
+        url_d = f"https://dnsdblookup.com/{ip}/"
+        res = requests.get(url_d, headers=headers_lib(), timeout=5)
+        site = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res.text, re.S)
+        # site 格式示例： [(时间段, 路径, 域名), ...]
 
+        # 只取域名和时间段的第一个时间，用于过滤
+        current_year = datetime.now().year
+        filter_year = current_year - 1
+
+        # 如果超过50条，过滤时间早于 filter_year 的
+        if len(site) > 50:
+            filtered = []
+            for date_range, path, domain in site:
+                # date_range 格式示例："2025-02-19-----2025-03-12"
+                start_date_str = date_range.split('-----')[0]
+                try:
+                    start_year = int(start_date_str[:4])
+                except Exception:
+                    start_year = 0  # 解析异常当作很旧的年份
+
+                if start_year >= filter_year:
+                    filtered.append(domain)
+            domains = filtered
+        else:
+            domains = [domain for _, _, domain in site]
+
+        if domains:
+            return ip, domains
+        else:
+            return ip, []
+    except Exception as e:
+        print(f"[!] dnsdblookup 反查失败: {e}")
+        try:
+            print("[>] 使用 RapidDns 反查域名接口")
+
+            # 先调用 RapidDns.sameip (请替换为你自己的实现)
+            domains = RapidDns.sameip(ip)
+            return ip, domains
+        except Exception as e:
+            print(f"[!] RapidDns 反查失败: {ip}, 错误: {e}")
+        # print("[>] 使用 ipinfo.io 反查域名接口")
+        return ip, []
+    return ip, None
 # 异步执行命令
 async def run_cmd_async(cmd):
     if DEBUG_FSCAN:
@@ -88,7 +134,7 @@ async def run_cmd_async(cmd):
         print(f"[ERROR] 返回码: {proc.returncode}")
         sys.exit(1)  # 终止程序
 
-    await finalize_report_directory(report_path, root)
+    # await finalize_report_directory(report_path, root)
 
     return stdout_str, stderr_str
 # ------------------------------------
@@ -252,6 +298,7 @@ async def ensure_base_info(root, report_path, valid_ips, urls, titles, filter_do
         print(f"[i] base_info 文件不存在，开始反查并写入 base_info")
         ip_domain_map = await resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn_ips, folder)
         print("[✓] 完成反查域名")
+        print(ip_domain_map)
         await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map)
         return ip_domain_map
 async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map):
@@ -295,7 +342,8 @@ async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter
 
         await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map)
         await write_representative_urls(folder, titles, urls)
-        await run_security_scans(root, folder, report_path)
+        if not ONLY_DOMAIN_MODE:
+            await run_security_scans(root, folder, report_path)
 
     else:
         ip_domain_map = await ensure_base_info(
@@ -306,14 +354,19 @@ async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter
         base_info_files = list(report_path.glob(f"base_info_{root}.txt"))
 
         has_scan_done = any(f.name == "扫描完成.txt" for f in files)
-
         if base_info_files and has_scan_done:
             print(f"[✓] 目标 {root} 已完成扫描（存在 base_info 和 扫描完成.txt），跳过。")
             return
 
         elif base_info_files:
-            print(f"[+] 只有 base_info 文件，执行 afrog 和 fscan")
+            print(f"[+] 只有 base_info 文件，准备处理")
+
+            if ONLY_DOMAIN_MODE:
+                print(f"[i] 跳过 run_security_scans，因启用了 --test")
+                return
+
             await run_security_scans(root, folder, report_path)
+
 
 def prepare_domain_folder(root):
     folder = Path("domains") / root
@@ -391,6 +444,37 @@ CDN_KEYWORDS = [
 
 def is_cdn_domain(domain: str) -> bool:
     return any(keyword in domain.lower() for keyword in CDN_KEYWORDS)
+def is_cdn_ip_new(ip, domains):
+    # print(f"[+] 判断IP: {ip} 是否是CDN节点")
+    
+    # 条件1：域名数量过多，直接判定为CDN
+    if len(domains) > 50:
+        print(f"[-] 域名数量太多({len(domains)}), 直接判定为CDN")
+        return True
+
+    # 随机选一个域名做测试
+    test_domain = random.choice(domains)
+    # print(f"[+] 选取的测试域名: {test_domain}")
+
+    try:
+        # 正向解析：域名 -> IP列表
+        ips = socket.gethostbyname_ex(test_domain)[2]
+        # print(f"[+] 正向解析 {test_domain} 得到IP列表: {ips}")
+        
+        if ip not in ips:
+            # print(f"[-] 目标IP {ip} 不在域名解析的IP列表中，判定为CDN")
+            return True
+
+        if len(ips) > 4:
+            # print(f"[-] 正向解析IP列表数量超过4 ({len(ips)}), 判定为CDN")
+            return True
+
+    except Exception as e:
+        # print(f"[-] 解析异常: {e}，判定为CDN")
+        return True
+
+    print(f"[+] 通过所有判断 {ip} 非CDN节点")
+    return False
 
 async def resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn_ips, folder):
     ip_domain_map = defaultdict(list)
@@ -403,11 +487,13 @@ async def resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn
 
         print(f"[✓] {ip_} 反查到域名数: {len(domains)}")
 
-        # ✅ 条件 1：域名太多
-        if len(domains) > 50:
-            print(f"[!] 超过50域名，标记CDN: {ip_}")
+
+
+        if is_cdn_ip_new(ip_, domains):
+            print(f"[!] {ip_} 识别为CDN IP，移除")
             cdn_ip_to_remove.add(ip_)
-            continue
+        else:
+            ip_domain_map[ip_].extend(domains)
 
         is_cdn = False
         for d in domains:
@@ -451,6 +537,25 @@ async def resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn
 
     return ip_domain_map, cdn_ip_to_remove
 
+def extract_root_domain(domain):
+    ext = tldextract.extract(domain)
+    if ext.suffix:
+        return f"{ext.domain}.{ext.suffix}"
+    return domain
+def write_root_domains(domain_list, report_folder):
+    root_domains = set()
+    for domain in domain_list:
+        root = extract_root_domain(domain)
+        root_domains.add(root)
+
+    output_path = Path(report_folder) / "tuozhan"
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    out_file = output_path / "ip_domain_summary.txt"
+    with open(out_file, "w", encoding="utf-8") as f:
+        for domain in sorted(root_domains):
+            f.write(f"{domain}\n")
+
 async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_domain_map, url_body_info_map):
 
 
@@ -462,6 +567,7 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
     repeat_map = defaultdict(list)
     indent1 = "  " # 一级缩进：2空格
     indent2 = "    " # 二级缩进：4空格
+    all_reverse_domains = []  # 新增：存储所有反查域名
 
     out_path = report_folder / f"base_info_{root}.txt"
     with open(out_path, "w", encoding="utf-8") as out:
@@ -506,6 +612,7 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
             if ip in ip_domain_map:
                 out.write(f"{indent1}[IP] {ip}\n")
                 for domain in ip_domain_map[ip]:
+                    all_reverse_domains.append(domain)  # 收集反查域名
                     out.write(f"{indent2}- {domain}\n")
 
         # URL BODY INFO，域名前2空格，后面来源信息无子项就2空格
@@ -565,6 +672,10 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
                     # out.write(f"{indent3}body_hash: {body_hash}\n")
                     # out.write(f"{indent3}IP: {', '.join(url_ips)}\n\n")
 
+        # 添加额外写入功能：域名反查扩展写入
+    if all_reverse_domains:
+        write_root_domains(all_reverse_domains, report_folder)
+
 
 async def write_representative_urls(folder, titles, urls):
     repeat_map = defaultdict(list)
@@ -590,21 +701,22 @@ async def run_security_scans(root, folder, report_folder):
     afrog_target_file = folder / "representative_urls.txt"
     fscan_target_file = folder / "a_records.txt"
 
-    # if not afrog_target_file.exists() or os.path.getsize(afrog_target_file) == 0:
-    #     empty_file = report_folder / "afrog目标为空.txt"
-    #     empty_file.touch()  # 创建空文件
-    #     print(f"[!] {afrog_target_file} 为空，已创建 {empty_file}，跳过afrog扫描")
-    # else:
-    #     afrog_cmd = AFROG_CMD_TEMPLATE.format(target_file=str(afrog_target_file), output_file=str(afrog_report))
-    #     await run_cmd_async(afrog_cmd)
+    if not afrog_target_file.exists() or os.path.getsize(afrog_target_file) == 0:
+        empty_file = report_folder / "afrog目标为空.txt"
+        empty_file.touch()  # 创建空文件
+        print(f"[!] {afrog_target_file} 为空，已创建 {empty_file}，跳过afrog扫描")
+    else:
+        afrog_cmd = AFROG_CMD_TEMPLATE.format(target_file=str(afrog_target_file), output_file=str(afrog_report))
+        await run_cmd_async(afrog_cmd)
 
-    # if not fscan_target_file.exists() or os.path.getsize(fscan_target_file) == 0:
-    #     empty_file = report_folder / "fscan目标为空.txt"
-    #     empty_file.touch()
-    #     print(f"[!] {fscan_target_file} 为空，已创建 {empty_file}，跳过fscan扫描")
-    # else:
-    #     fscan_cmd = FSCAN_CMD_TEMPLATE.format(target_file=str(fscan_target_file), output_file=str(fscan_report))
-    #     await run_cmd_async(fscan_cmd)
+    if not fscan_target_file.exists() or os.path.getsize(fscan_target_file) == 0:
+        empty_file = report_folder / "fscan目标为空.txt"
+        empty_file.touch()
+        print(f"[!] {fscan_target_file} 为空，已创建 {empty_file}，跳过fscan扫描")
+    else:
+        fscan_cmd = FSCAN_CMD_TEMPLATE.format(target_file=str(fscan_target_file), output_file=str(fscan_report))
+        await run_cmd_async(fscan_cmd)
+    await finalize_report_directory(report_folder, root)
 
 
 async def finalize_report_directory(report_folder, root):
