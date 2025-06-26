@@ -49,10 +49,12 @@ FILTER_DOMAIN_PATH = "file/filter-domain.txt"
 
 
 hunter_proxies = "socks5h://127.0.0.1:7891"
+config_path = Path("file/config.ini")
+config = configparser.ConfigParser()
+config.read(config_path, encoding='utf-8')
 
-
-TEST_EMAIL = "onlyctfer@tutanota.com"
-TEST_KEY = "0c29b33737d6ad37305708b2fb56e670"
+TEST_EMAIL = config['DEFAULT'].get('TEST_EMAIL')
+TEST_KEY = config['DEFAULT'].get('TEST_KEY')
 HUNTER_API_KEY = ""
 
 executor = ThreadPoolExecutor(max_workers=10)  # 线程池大小可调
