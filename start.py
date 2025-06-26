@@ -202,7 +202,7 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
 
             title = item.get("title", "").strip()
             tls_info = item.get("tls", {})  
-            cert = tls_info.get("subject_dn", "").strip()
+            cert = tls_info.get("subject_cn", "").strip()
             ico = item.get("favicon_md5", "").strip()
             ico_mmh3 = item.get("favicon", "").strip()
             hash_info = item.get("hash", {})
@@ -626,12 +626,15 @@ async def query_platform_by_hash(hash_value, platform="fofa", hash_type="icon_ha
         except Exception as e:
             print(f"[!] 查询失败 (hunter): {e}")
             return []
-async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=None,domain_list=None,use_hunter=False,hunter_proxies=None,hunter_ico_md5_list=None):
+async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=None,domain_list=None,use_hunter=False,hunter_proxies=None,hunter_ico_md5_list=None,cert_root_domains=None):
     tuozhan_dir = Path(report_folder) / "tuozhan"
     fofa_dir = tuozhan_dir / "fofa"
-
+    ip_re_dir = tuozhan_dir / "ip_re"
+    all_tuozhan_dir = tuozhan_dir / "all_tuozhan"
+    tuozhan_dir.mkdir(parents=True, exist_ok=True)  # 显式创建一级目录
     fofa_dir.mkdir(parents=True, exist_ok=True)
-
+    ip_re_dir.mkdir(parents=True, exist_ok=True)
+    all_tuozhan_dir.mkdir(parents=True, exist_ok=True)
     if use_hunter:
         hunter_dir = tuozhan_dir / "hunter"
         hunter_dir.mkdir(parents=True, exist_ok=True)
@@ -719,12 +722,35 @@ async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=N
                     f.write(f"{domain}\n")
             print(f"[+] 写入 FOFA 结果到: {file_path}")
 
+    # cert 查询（FOFA）
+    if cert_root_domains:
+        for domain in sorted(cert_root_domains):
+            print(f"[+] 查询 FOFA cert={domain}")
+            try:
+                domains = await query_platform_by_hash(
+                    hash_value=domain,
+                    platform="fofa",
+                    hash_type="cert"  # 注意这里是 cert
+                )
+            except Exception as e:
+                print(f"[!] FOFA 查询失败: cert={domain} 错误: {e}")
+                continue
+
+            if not domains:
+                print(f"[!] FOFA 查询为空: cert={domain}")
+                continue
+
+            file_path = fofa_dir / f"cert_{domain}.txt"
+            with open(file_path, "w", encoding="utf-8") as f:
+                for d in domains:
+                    f.write(f"{d}\n")
+            print(f"[+] 写入 FOFA 结果到: {file_path}")
+
     # IP反查域名部分
     if domain_list:
         root_domains = {extract_root_domain(d) for d in domain_list if d}
         if root_domains:
-            tuozhan_dir.mkdir(parents=True, exist_ok=True)
-            out_file = tuozhan_dir / "ip_domain_summary.txt"
+            out_file = ip_re_dir / "ip_domain_summary.txt"
             with open(out_file, "w", encoding="utf-8") as f:
                 for domain in sorted(root_domains):
                     f.write(f"{domain}\n")
@@ -824,10 +850,18 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
         for bh_mmh3 in sorted(all_body_mmh3):
             out.write(f"{indent2}{bh_mmh3}\n")
 
+        # 提取并去重主域名
+        cert_root_domains = {
+            extract_root_domain(cert.lstrip("*.").strip())
+            for cert in all_certs if cert and cert.strip()
+        }
 
-        out.write("\n证书(目前需要手动筛选):\n")
-        for cert in sorted(all_certs):
-            out.write(f"{indent1}{cert}\n")
+        # 输出主域名
+        out.write("\n证书主域名:\n")
+        for cert_domain in sorted(cert_root_domains):
+            out.write(f"{indent1}{cert_domain}\n")
+
+        out.write("\nasn信息(暂未实现):\n")
 
         # 重复网站，URL前2空格，详细信息4空格，二级详细信息8空格
         out.write(f"\n{'='*30}\n重复网站:\n{'='*30}\n\n")
@@ -846,16 +880,18 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
                     # out.write(f"{indent3}IP: {', '.join(url_ips)}\n\n")
 
         # 添加额外写入功能：域名反查扩展写入
-    if all_reverse_domains or all_icos_mmh3 or all_body_mmh3:
+    if all_reverse_domains or all_icos_mmh3 or all_body_mmh3 or cert_root_domains:
         # 写入拓展信息（fofa icon_hash、body_hash、反查域名根）
         await write_expanded_reports(
             report_folder,
             ico_mmh3_set=all_icos_mmh3,
             body_mmh3_set=all_body_mmh3,
             domain_list=all_reverse_domains,
-            use_hunter=False,           # 用 Hunter 查询
+            use_hunter=False,           # 用 Hunter 查询 暂不启用
             hunter_proxies=hunter_proxies,  # 传代理
-            hunter_ico_md5_list=all_icos  # 这里补上 Hunter 查询的 ico md5 列表
+            hunter_ico_md5_list=all_icos,
+            cert_root_domains=cert_root_domains  # 你需要支持传这个参数
+
         )
 
 
