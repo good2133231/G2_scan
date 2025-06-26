@@ -51,9 +51,9 @@ FILTER_DOMAIN_PATH = "file/filter-domain.txt"
 hunter_proxies = "socks5h://127.0.0.1:7891"
 
 
-FOFA_EMAIL = "onlyctfer@tutanota.com"
-FOFA_KEY = "0c29b33737d6ad37305708b2fb56e670"
-HUNTER_API_KEY = "0005785352cfcbf29bfff44cf7ec447f0c7bf06e9589726a3c33be73dfc110b3"
+TEST_EMAIL = "onlyctfer@tutanota.com"
+TEST_KEY = "0c29b33737d6ad37305708b2fb56e670"
+HUNTER_API_KEY = ""
 
 executor = ThreadPoolExecutor(max_workers=10)  # 线程池大小可调
 semaphore = asyncio.Semaphore(5)  # 限制并发请求数
@@ -569,7 +569,7 @@ async def query_platform_by_hash(hash_value, platform="fofa", hash_type="icon_ha
         qbase64 = base64.b64encode(query.encode()).decode()
         url = (
             f"https://fofa.info/api/v1/search/all?"
-            f"email={FOFA_EMAIL}&key={FOFA_KEY}&qbase64={qbase64}"
+            f"email={TEST_EMAIL}&key={TEST_KEY}&qbase64={qbase64}"
             f"&size={size}&fields=host"
         )
 
