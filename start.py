@@ -4,6 +4,8 @@ import os
 import json
 import subprocess
 from pathlib import Path
+import httpx
+import time
 from urllib.parse import urlparse
 from collections import defaultdict
 from tld import get_fld
@@ -22,6 +24,7 @@ import signal
 import requests
 from datetime import datetime
 import random
+import base64
 # ------------------------------------
 # 命令模板和配置
 if '-small' in sys.argv:
@@ -43,6 +46,14 @@ CDN_LIST_PATH = "file/cdn.txt"
 CDN_DYNAMIC_PATH = "file/cdn_动态添加_一年清一次.txt"
 URL_TITLE_PATH = "reports/url_title.txt"
 FILTER_DOMAIN_PATH = "file/filter-domain.txt"
+
+
+hunter_proxies = "socks5h://127.0.0.1:7891"
+
+
+FOFA_EMAIL = "onlyctfer@tutanota.com"
+FOFA_KEY = "0c29b33737d6ad37305708b2fb56e670"
+HUNTER_API_KEY = "0005785352cfcbf29bfff44cf7ec447f0c7bf06e9589726a3c33be73dfc110b3"
 
 executor = ThreadPoolExecutor(max_workers=10)  # 线程池大小可调
 semaphore = asyncio.Semaphore(5)  # 限制并发请求数
@@ -542,23 +553,185 @@ def extract_root_domain(domain):
     if ext.suffix:
         return f"{ext.domain}.{ext.suffix}"
     return domain
-def write_root_domains(domain_list, report_folder):
-    root_domains = set()
-    for domain in domain_list:
-        root = extract_root_domain(domain)
-        root_domains.add(root)
+async def query_platform_by_hash(hash_value, platform="fofa", hash_type="icon_hash", size=100, proxies=None):
+    """
+    通用 hash 查询接口，支持 FOFA / Hunter，返回域名列表。
+    :param hash_value: hash 值（icon_hash / body_hash）
+    :param platform: 平台标识 "fofa" / "hunter"
+    :param hash_type: 查询类型 icon_hash / body_hash (FOFA) 或 web.icon (Hunter)
+    :param size: 最大返回数量（fofa 用，hunter 固定一页 100）
+    :param proxies: 代理 URL 字符串，例如 "socks5h://127.0.0.1:7891" 或 "http://127.0.0.1:7890"
+    """
+    assert platform in {"fofa", "hunter"}, "platform 必须是 'fofa' 或 'hunter'"
 
-    output_path = Path(report_folder) / "tuozhan"
-    output_path.mkdir(parents=True, exist_ok=True)
+    if platform == "fofa":
+        query = f'{hash_type}="{hash_value}"'
+        qbase64 = base64.b64encode(query.encode()).decode()
+        url = (
+            f"https://fofa.info/api/v1/search/all?"
+            f"email={FOFA_EMAIL}&key={FOFA_KEY}&qbase64={qbase64}"
+            f"&size={size}&fields=host"
+        )
 
-    out_file = output_path / "ip_domain_summary.txt"
-    with open(out_file, "w", encoding="utf-8") as f:
-        for domain in sorted(root_domains):
-            f.write(f"{domain}\n")
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                data = r.json()
+
+                if data.get("error") is False:
+                    results = data.get("results", [])
+                    if not results:
+                        print(f"[!] FOFA 空结果: {hash_type}={hash_value}")
+                        return []
+                    first_item = results[0]
+                    if isinstance(first_item, list):
+                        return list(set(row[0] for row in results if row))
+                    elif isinstance(first_item, str):
+                        return list(set(results))
+                    else:
+                        print(f"[!] FOFA 未知结果格式: {type(first_item)}")
+                        return []
+                else:
+                    print(f"[!] FOFA 错误: {data.get('errmsg')}")
+                    return []
+
+        except Exception as e:
+            print(f"[!] 查询失败 (fofa): {e}")
+            return []
+
+    else:  # Hunter 查询
+        query = f'web.icon="{hash_value}"'
+        start_time = time.strftime("%Y-%m-%d", time.localtime(time.time() - 30*24*3600))
+        end_time = time.strftime("%Y-%m-%d", time.localtime())
+        url = (
+            f"https://hunter.qianxin.com/openApi/search?"
+            f"api-key={HUNTER_API_KEY}&search={query}&start_time={start_time}&end_time={end_time}"
+            f"&page=1&page_size=100&is_web=3"
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=10, proxy=proxies) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                data = r.json()
+
+                if data.get("code") != 200:
+                    print(f"[!] Hunter 错误: {data.get('message')}")
+                    return []
+
+                results = data.get("data", {}).get("arr", [])
+                return list({r.get("domain") for r in results if r.get("domain")})
+
+        except Exception as e:
+            print(f"[!] 查询失败 (hunter): {e}")
+            return []
+async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=None,domain_list=None,use_hunter=False,hunter_proxies=None,hunter_ico_md5_list=None):
+    tuozhan_dir = Path(report_folder) / "tuozhan"
+    fofa_dir = tuozhan_dir / "fofa"
+
+    fofa_dir.mkdir(parents=True, exist_ok=True)
+
+    if use_hunter:
+        hunter_dir = tuozhan_dir / "hunter"
+        hunter_dir.mkdir(parents=True, exist_ok=True)
+
+    # icon_hash 查询
+    if ico_mmh3_set:
+        # FOFA 使用 mmh3_hash 查询
+        for hash_value in sorted(ico_mmh3_set):
+            if use_hunter:
+                # Hunter 只用 md5 查询 ico，没 md5 数据时跳过或警告
+                if not hunter_ico_md5_list:
+                    print(f"[!] Hunter 查询需要传入 ico md5 列表，当前为空，跳过 icon_hash={hash_value}")
+                    continue
+
+                for md5_hash in hunter_ico_md5_list:
+                    print(f"[+] 查询 HUNTER icon md5={md5_hash}")
+                    try:
+                        domains = await query_platform_by_hash(
+                            md5_hash,
+                            platform="hunter",
+                            hash_type="icon_md5",  # 自定义hash_type，表明是md5查询
+                            proxies=hunter_proxies
+                        )
+                    except Exception as e:
+                        print(f"[!] Hunter 查询失败: {e}")
+                        continue
+
+                    if not domains:
+                        print(f"[!] Hunter 查询为空: icon_md5={md5_hash}")
+                        continue
+
+                    file_path = hunter_dir / f"icon_md5_hunter_{md5_hash}.txt"
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        for domain in domains:
+                            f.write(f"{domain}\n")
+                    print(f"[+] 写入 Hunter 结果到: {file_path}")
+            else:
+                # FOFA 查询 mmh3_hash
+                print(f"[+] 查询 FOFA icon_hash={hash_value}")
+                try:
+                    domains = await query_platform_by_hash(
+                        hash_value,
+                        platform="fofa",
+                        hash_type="icon_hash"
+                    )
+                except Exception as e:
+                    print(f"[!] FOFA 查询失败: {e}")
+                    continue
+
+                if not domains:
+                    print(f"[!] FOFA 查询为空: icon_hash={hash_value}")
+                    continue
+
+                file_path = fofa_dir / f"icon_hash_{hash_value}.txt"
+                with open(file_path, "w", encoding="utf-8") as f:
+                    for domain in domains:
+                        f.write(f"{domain}\n")
+                print(f"[+] 写入 FOFA 结果到: {file_path}")
+
+    # body_hash 查询（Hunter 目前不支持，暂时只做FOFA）
+    if body_mmh3_set:
+        for hash_value in sorted(body_mmh3_set):
+            # if use_hunter:
+            #     print(f"[!] Hunter 目前不支持 body_hash 查询，跳过 body_hash={hash_value}")
+            #     continue
+
+            print(f"[+] 查询 FOFA body_hash={hash_value}")
+            try:
+                domains = await query_platform_by_hash(
+                    hash_value,
+                    platform="fofa",
+                    hash_type="body_hash"
+                )
+            except Exception as e:
+                print(f"[!] FOFA 查询失败: {e}")
+                continue
+
+            if not domains:
+                print(f"[!] FOFA 查询为空: body_hash={hash_value}")
+                continue
+
+            file_path = fofa_dir / f"body_hash_{hash_value}.txt"
+            with open(file_path, "w", encoding="utf-8") as f:
+                for domain in domains:
+                    f.write(f"{domain}\n")
+            print(f"[+] 写入 FOFA 结果到: {file_path}")
+
+    # IP反查域名部分
+    if domain_list:
+        root_domains = {extract_root_domain(d) for d in domain_list if d}
+        if root_domains:
+            tuozhan_dir.mkdir(parents=True, exist_ok=True)
+            out_file = tuozhan_dir / "ip_domain_summary.txt"
+            with open(out_file, "w", encoding="utf-8") as f:
+                for domain in sorted(root_domains):
+                    f.write(f"{domain}\n")
+            print(f"[+] 写入ip反查域名结果到: {out_file}")
+
 
 async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_domain_map, url_body_info_map):
-
-
     all_icos = set()
     all_body_hashes = set()
     all_certs = set()
@@ -618,7 +791,7 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
         # URL BODY INFO，域名前2空格，后面来源信息无子项就2空格
         urls_for_root = [url for url in urls if url_body_info_map.get(url)]
         if urls_for_root:
-            out.write(f"\n[URL BODY INFO - 域名: {root}]\n")
+            out.write(f"\n[URL BODY INFO - 域名(目前需要手动筛选): {root}]\n")
             url_domains_seen = {urlparse(url).hostname for url in urls_for_root if urlparse(url).hostname}
             domain_source_map = defaultdict(set)
             for url in urls_for_root:
@@ -652,7 +825,7 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
             out.write(f"{indent2}{bh_mmh3}\n")
 
 
-        out.write("\n证书:\n")
+        out.write("\n证书(目前需要手动筛选):\n")
         for cert in sorted(all_certs):
             out.write(f"{indent1}{cert}\n")
 
@@ -673,8 +846,18 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
                     # out.write(f"{indent3}IP: {', '.join(url_ips)}\n\n")
 
         # 添加额外写入功能：域名反查扩展写入
-    if all_reverse_domains:
-        write_root_domains(all_reverse_domains, report_folder)
+    if all_reverse_domains or all_icos_mmh3 or all_body_mmh3:
+        # 写入拓展信息（fofa icon_hash、body_hash、反查域名根）
+        await write_expanded_reports(
+            report_folder,
+            ico_mmh3_set=all_icos_mmh3,
+            body_mmh3_set=all_body_mmh3,
+            domain_list=all_reverse_domains,
+            use_hunter=False,           # 用 Hunter 查询
+            hunter_proxies=hunter_proxies,  # 传代理
+            hunter_ico_md5_list=all_icos  # 这里补上 Hunter 查询的 ico md5 列表
+        )
+
 
 
 async def write_representative_urls(folder, titles, urls):
