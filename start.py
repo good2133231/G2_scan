@@ -25,6 +25,8 @@ import requests
 from datetime import datetime
 import random
 import base64
+import configparser
+import aiofiles
 # ------------------------------------
 # 命令模板和配置
 if '-small' in sys.argv:
@@ -628,6 +630,106 @@ async def query_platform_by_hash(hash_value, platform="fofa", hash_type="icon_ha
         except Exception as e:
             print(f"[!] 查询失败 (hunter): {e}")
             return []
+def is_ip(string):
+    return re.match(r"^\d{1,3}(\.\d{1,3}){3}$", string) is not None
+def clean_line(line):
+    return line.strip().strip('"').strip("'").strip()
+async def read_lines_from_file(filepath):
+    lines = set()
+    if os.path.exists(filepath):
+        async with aiofiles.open(filepath, mode='r') as f:
+            async for line in f:
+                line = clean_line(line)
+                if line:
+                    lines.add(line)
+    return lines
+async def write_lines_to_file(filepath, lines):
+    if not lines:
+        return
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    async with aiofiles.open(filepath, mode='a') as f:
+        for line in sorted(lines):
+            await f.write(line + '\n')
+def parse_url(line):
+    line = clean_line(line)
+    if not line:
+        return None, None
+    if line.startswith('http://') or line.startswith('https://'):
+        parsed = urlparse(line)
+        hostname = parsed.hostname
+        return line, hostname
+    else:
+        return None, line  # treat as domain or IP
+def strip_url_scheme(url: str) -> str:
+    """去掉 http:// 或 https://，只返回 host"""
+    url = url.strip()
+    if url.startswith("http://") or url.startswith("https://"):
+        parsed = urlparse(url)
+        return parsed.hostname or url  # fallback
+    return url
+
+async def merge_all_expanded_results(report_folder: str, root_domain: str):
+    import os
+    import aiofiles
+
+    tuozhan_path = os.path.join(report_folder, "tuozhan")
+    all_dir = os.path.join(tuozhan_path, "all_tuozhan")
+    os.makedirs(all_dir, exist_ok=True)
+
+    # ✅ 加载已存在 URLs 并去掉协议（只保留 host）
+    existing_report_folder=f"./domains/{root_domain}"
+    existing_urls_raw = await read_lines_from_file(os.path.join(existing_report_folder, "urls.txt"))
+    existing_urls_hosts = {strip_url_scheme(u) for u in existing_urls_raw}
+    print(existing_urls_hosts)
+    # ✅ 加载已存在 IP
+    a_record_path = f"{existing_report_folder}/a_records.txt"
+    existing_ips = await read_lines_from_file(a_record_path)
+
+    merged_urls = set()
+    merged_ips = set()
+    merged_roots = set()
+
+    # ✅ 1. 处理 fofa 子目录下所有 txt 文件
+    for subfolder in ["fofa"]:
+        full_path = os.path.join(tuozhan_path, subfolder)
+        if not os.path.exists(full_path):
+            continue
+
+        for fname in os.listdir(full_path):
+            if not fname.endswith(".txt"):
+                continue
+            fpath = os.path.join(full_path, fname)
+
+            async with aiofiles.open(fpath, mode='r') as f:
+                async for line in f:
+                    line = clean_line(line)
+                    host = strip_url_scheme(line)
+                    if not host:
+                        continue
+                    if is_ip(host):
+                        if host not in existing_ips:
+                            merged_ips.add(host)
+                    else:
+                        if host not in existing_urls_hosts:
+                            merged_urls.add(host)  # ✅ 注意：写入的是 host，不是原始 URL
+
+    # ✅ 2. 合并 root domain
+    ip_re_path = os.path.join(tuozhan_path, "ip_re", "ip_domain_summary.txt")
+    if os.path.exists(ip_re_path):
+        async with aiofiles.open(ip_re_path, mode='r') as f:
+            async for line in f:
+                domain = clean_line(line)
+                if not domain or is_ip(domain):
+                    continue
+                root = extract_root_domain(domain)
+                if root and root not in existing_urls_hosts:
+                    merged_roots.add(root)
+
+    # ✅ 3. 写入去重后的新内容
+    await write_lines_to_file(os.path.join(all_dir, "urls.txt"), merged_urls)
+    await write_lines_to_file(os.path.join(all_dir, "ip.txt"), merged_ips)
+    await write_lines_to_file(os.path.join(all_dir, "root_domains.txt"), merged_roots)
+
 async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=None,domain_list=None,use_hunter=False,hunter_proxies=None,hunter_ico_md5_list=None,cert_root_domains=None):
     tuozhan_dir = Path(report_folder) / "tuozhan"
     fofa_dir = tuozhan_dir / "fofa"
@@ -757,6 +859,7 @@ async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=N
                 for domain in sorted(root_domains):
                     f.write(f"{domain}\n")
             print(f"[+] 写入ip反查域名结果到: {out_file}")
+
 
 
 async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_domain_map, url_body_info_map):
@@ -895,6 +998,7 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
             cert_root_domains=cert_root_domains  # 你需要支持传这个参数
 
         )
+        await merge_all_expanded_results(report_folder, root)
 
 
 
@@ -920,7 +1024,6 @@ async def run_security_scans(root, folder, report_folder):
     afrog_report = report_folder / f"afrog_report_{root}.json"
     fscan_report = report_folder / f"fscan_result_{root}.txt"
     afrog_target_file = folder / "representative_urls.txt"
-    fscan_target_file = folder / "a_records.txt"
 
     if not afrog_target_file.exists() or os.path.getsize(afrog_target_file) == 0:
         empty_file = report_folder / "afrog目标为空.txt"
@@ -1057,7 +1160,6 @@ async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cd
     global SKIP_CURRENT_DOMAIN
     print("[*] 开始逐个执行域名流程...")
     sorted_domains = sorted(domain_urls_map.keys(), key=natural_sort_key)
-    print("[*] 需要处理的域名列表:", sorted_domains)
 
     for domain in sorted_domains:
         if SKIP_CURRENT_DOMAIN:
