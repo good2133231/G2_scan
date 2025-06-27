@@ -669,8 +669,6 @@ def strip_url_scheme(url: str) -> str:
     return url
 
 async def merge_all_expanded_results(report_folder: str, root_domain: str):
-    import os
-    import aiofiles
 
     tuozhan_path = os.path.join(report_folder, "tuozhan")
     all_dir = os.path.join(tuozhan_path, "all_tuozhan")
@@ -730,53 +728,48 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str):
     await write_lines_to_file(os.path.join(all_dir, "ip.txt"), merged_ips)
     await write_lines_to_file(os.path.join(all_dir, "root_domains.txt"), merged_roots)
 
-async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=None,domain_list=None,use_hunter=False,hunter_proxies=None,hunter_ico_md5_list=None,cert_root_domains=None):
+async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set=None, domain_list=None, use_hunter=False, hunter_proxies=None, hunter_ico_md5_list=None, cert_root_domains=None, cert_root_domain_map=None, ico_md5_url_map=None, ico_mmh3_url_map=None, body_md5_url_map=None, body_mmh3_url_map=None):
     tuozhan_dir = Path(report_folder) / "tuozhan"
     fofa_dir = tuozhan_dir / "fofa"
     ip_re_dir = tuozhan_dir / "ip_re"
     all_tuozhan_dir = tuozhan_dir / "all_tuozhan"
-    tuozhan_dir.mkdir(parents=True, exist_ok=True)  # 显式创建一级目录
+    tuozhan_dir.mkdir(parents=True, exist_ok=True)
     fofa_dir.mkdir(parents=True, exist_ok=True)
     ip_re_dir.mkdir(parents=True, exist_ok=True)
     all_tuozhan_dir.mkdir(parents=True, exist_ok=True)
+
     if use_hunter:
         hunter_dir = tuozhan_dir / "hunter"
         hunter_dir.mkdir(parents=True, exist_ok=True)
 
-    # icon_hash 查询
     if ico_mmh3_set:
-        # FOFA 使用 mmh3_hash 查询
         for hash_value in sorted(ico_mmh3_set):
             if use_hunter:
-                # Hunter 只用 md5 查询 ico，没 md5 数据时跳过或警告
                 if not hunter_ico_md5_list:
                     print(f"[!] Hunter 查询需要传入 ico md5 列表，当前为空，跳过 icon_hash={hash_value}")
                     continue
-
                 for md5_hash in hunter_ico_md5_list:
                     print(f"[+] 查询 HUNTER icon md5={md5_hash}")
                     try:
                         domains = await query_platform_by_hash(
                             md5_hash,
                             platform="hunter",
-                            hash_type="icon_md5",  # 自定义hash_type，表明是md5查询
+                            hash_type="icon_md5",
                             proxies=hunter_proxies
                         )
                     except Exception as e:
                         print(f"[!] Hunter 查询失败: {e}")
                         continue
-
                     if not domains:
-                        print(f"[!] Hunter 查询为空: icon_md5={md5_hash}")
                         continue
-
                     file_path = hunter_dir / f"icon_md5_hunter_{md5_hash}.txt"
                     with open(file_path, "w", encoding="utf-8") as f:
+                        if ico_md5_url_map and md5_hash in ico_md5_url_map:
+                            for src in sorted(ico_md5_url_map[md5_hash]):
+                                f.write(f"# 来源: {src}\n")
                         for domain in domains:
                             f.write(f"{domain}\n")
-                    print(f"[+] 写入 Hunter 结果到: {file_path}")
             else:
-                # FOFA 查询 mmh3_hash
                 print(f"[+] 查询 FOFA icon_hash={hash_value}")
                 try:
                     domains = await query_platform_by_hash(
@@ -787,24 +780,18 @@ async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=N
                 except Exception as e:
                     print(f"[!] FOFA 查询失败: {e}")
                     continue
-
                 if not domains:
-                    print(f"[!] FOFA 查询为空: icon_hash={hash_value}")
                     continue
-
                 file_path = fofa_dir / f"icon_hash_{hash_value}.txt"
                 with open(file_path, "w", encoding="utf-8") as f:
+                    if ico_mmh3_url_map and hash_value in ico_mmh3_url_map:
+                        for src in sorted(ico_mmh3_url_map[hash_value]):
+                            f.write(f"# 来源: {src}\n")
                     for domain in domains:
                         f.write(f"{domain}\n")
-                print(f"[+] 写入 FOFA 结果到: {file_path}")
 
-    # body_hash 查询（Hunter 目前不支持，暂时只做FOFA）
     if body_mmh3_set:
         for hash_value in sorted(body_mmh3_set):
-            # if use_hunter:
-            #     print(f"[!] Hunter 目前不支持 body_hash 查询，跳过 body_hash={hash_value}")
-            #     continue
-
             print(f"[+] 查询 FOFA body_hash={hash_value}")
             try:
                 domains = await query_platform_by_hash(
@@ -815,42 +802,38 @@ async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=N
             except Exception as e:
                 print(f"[!] FOFA 查询失败: {e}")
                 continue
-
             if not domains:
-                print(f"[!] FOFA 查询为空: body_hash={hash_value}")
                 continue
-
             file_path = fofa_dir / f"body_hash_{hash_value}.txt"
             with open(file_path, "w", encoding="utf-8") as f:
+                if body_mmh3_url_map and hash_value in body_mmh3_url_map:
+                    for src in sorted(body_mmh3_url_map[hash_value]):
+                        f.write(f"# 来源: {src}\n")
                 for domain in domains:
                     f.write(f"{domain}\n")
-            print(f"[+] 写入 FOFA 结果到: {file_path}")
 
-    # cert 查询（FOFA）
     if cert_root_domains:
         for domain in sorted(cert_root_domains):
             print(f"[+] 查询 FOFA cert={domain}")
             try:
                 domains = await query_platform_by_hash(
-                    hash_value=domain,
+                    domain,
                     platform="fofa",
-                    hash_type="cert"  # 注意这里是 cert
+                    hash_type="cert"
                 )
             except Exception as e:
                 print(f"[!] FOFA 查询失败: cert={domain} 错误: {e}")
                 continue
-
             if not domains:
-                print(f"[!] FOFA 查询为空: cert={domain}")
                 continue
-
             file_path = fofa_dir / f"cert_{domain}.txt"
             with open(file_path, "w", encoding="utf-8") as f:
+                if cert_root_domain_map and domain in cert_root_domain_map:
+                    for src in sorted(cert_root_domain_map[domain]):
+                        f.write(f"# 来源: {src}\n")
                 for d in domains:
                     f.write(f"{d}\n")
-            print(f"[+] 写入 FOFA 结果到: {file_path}")
 
-    # IP反查域名部分
     if domain_list:
         root_domains = {extract_root_domain(d) for d in domain_list if d}
         if root_domains:
@@ -858,68 +841,77 @@ async def write_expanded_reports(report_folder,ico_mmh3_set=None,body_mmh3_set=N
             with open(out_file, "w", encoding="utf-8") as f:
                 for domain in sorted(root_domains):
                     f.write(f"{domain}\n")
-            print(f"[+] 写入ip反查域名结果到: {out_file}")
 
 
 
 async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_domain_map, url_body_info_map):
+    from collections import defaultdict
+    from urllib.parse import urlparse
+
     all_icos = set()
     all_body_hashes = set()
     all_certs = set()
     all_icos_mmh3 = set()
     all_body_mmh3 = set()
+    all_reverse_domains = []
+
+    ico_md5_url_map = defaultdict(set)
+    ico_mmh3_url_map = defaultdict(set)
+    body_md5_url_map = defaultdict(set)
+    body_mmh3_url_map = defaultdict(set)
+    cert_root_url_map = defaultdict(set)
+
     repeat_map = defaultdict(list)
-    indent1 = "  " # 一级缩进：2空格
-    indent2 = "    " # 二级缩进：4空格
-    all_reverse_domains = []  # 新增：存储所有反查域名
+
+    indent1 = "  "
+    indent2 = "    "
 
     out_path = report_folder / f"base_info_{root}.txt"
     with open(out_path, "w", encoding="utf-8") as out:
         out.write(f"{'='*30}\n[基础信息汇总] 域名: {root}\n{'='*30}\n")
 
-        # 关联真实IP，IP前2空格，下面没子项
         out.write("关联真实IP:\n")
         for ip in sorted(valid_ips):
             out.write(f"{indent1}- {ip}\n")
 
-        # URL和标题，URL前2空格，详细信息缩进4空格
         out.write("\nURL和标题:\n")
         for url in urls:
-            title, cert, ico, body_hash, url_ips,ico_mmh3,bd_mmh3 = titles.get(url, ("", "", "", "", (),"",""))
-            key = (body_hash, cert, ",".join(sorted(url_ips)), ico,ico_mmh3,bd_mmh3)
-            repeat_map[key].append((url, title, cert, ico, body_hash,ico_mmh3,bd_mmh3))
+            title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3 = titles.get(url, ("", "", "", "", (), "", ""))
+            key = (body_hash, cert, ",".join(sorted(url_ips)), ico, ico_mmh3, bd_mmh3)
+            repeat_map[key].append((url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3))
 
         for url_list in repeat_map.values():
-            for i, (url, title, cert, ico, body_hash,ico_mmh3,bd_mmh3) in enumerate(url_list):
+            for i, (url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3) in enumerate(url_list):
                 if i > 0:
                     continue
                 url_ips = titles.get(url, ("", "", "", "", ()))[-1]
                 out.write(f"{indent1}- {url} [{title}]\n")
-                #out.write(f"{indent2}标题: {title}\n")
-                # out.write(f"{indent2}证书: {cert}\n")
-                # out.write(f"{indent2}ico: {ico}\n")
-                # out.write(f"{indent2}body_hash: {body_hash}\n")
-                # out.write(f"{indent2}IP: {', '.join(url_ips)}\n")
                 if ico:
                     all_icos.add(ico)
+                    ico_md5_url_map[ico].add(url)
                 if body_hash:
                     all_body_hashes.add(body_hash)
-                if cert and cert.strip():
-                    all_certs.add(cert)
+                    body_md5_url_map[body_hash].add(url)
                 if ico_mmh3:
                     all_icos_mmh3.add(ico_mmh3)
+                    ico_mmh3_url_map[ico_mmh3].add(url)
                 if bd_mmh3:
                     all_body_mmh3.add(bd_mmh3)
-        # IP反查域名，IP前2空格，域名前4空格
+                    body_mmh3_url_map[bd_mmh3].add(url)
+                if cert and cert.strip():
+                    root_domain = extract_root_domain(cert.strip("*."))
+                    if root_domain:
+                        all_certs.add(cert)
+                        cert_root_url_map[root_domain].add(url)
+
         out.write("\nIP反查域名:\n")
         for ip in sorted(valid_ips):
             if ip in ip_domain_map:
                 out.write(f"{indent1}[IP] {ip}\n")
                 for domain in ip_domain_map[ip]:
-                    all_reverse_domains.append(domain)  # 收集反查域名
+                    all_reverse_domains.append(domain)
                     out.write(f"{indent2}- {domain}\n")
 
-        # URL BODY INFO，域名前2空格，后面来源信息无子项就2空格
         urls_for_root = [url for url in urls if url_body_info_map.get(url)]
         if urls_for_root:
             out.write(f"\n[URL BODY INFO - 域名(目前需要手动筛选): {root}]\n")
@@ -937,69 +929,58 @@ async def write_base_report(root, report_folder, valid_ips, urls, titles, ip_dom
                 else:
                     out.write(f"{indent1}{domain} [来源数量: {len(source_urls)}]\n")
 
-        # 资源汇总，一级标题无缩进，内容缩进2空格
         out.write(f"\n{'='*30}\n资源汇总:\n{'='*30}\n")
         out.write("ico:\n")
         out.write(f"{indent1}md5:\n")
         for ico in sorted(all_icos):
             out.write(f"{indent2}{ico}\n")
         out.write(f"{indent1}mmh3_hash:\n")
-        for ico_mmh3 in sorted(all_icos_mmh3):
-            out.write(f"{indent2}{ico_mmh3}\n")
-            
+        for h in sorted(all_icos_mmh3):
+            out.write(f"{indent2}{h}\n")
+
         out.write("\nbody_hash:\n")
         out.write(f"{indent1}md5:\n")
-        for bh in sorted(all_body_hashes):
-            out.write(f"{indent2}{bh}\n")
+        for h in sorted(all_body_hashes):
+            out.write(f"{indent2}{h}\n")
         out.write(f"{indent1}mmh3_hash:\n")
-        for bh_mmh3 in sorted(all_body_mmh3):
-            out.write(f"{indent2}{bh_mmh3}\n")
+        for h in sorted(all_body_mmh3):
+            out.write(f"{indent2}{h}\n")
 
-        # 提取并去重主域名
-        cert_root_domains = {
-            extract_root_domain(cert.lstrip("*.").strip())
-            for cert in all_certs if cert and cert.strip()
-        }
-
-        # 输出主域名
+        cert_root_domains = set(cert_root_url_map.keys())
         out.write("\n证书主域名:\n")
         for cert_domain in sorted(cert_root_domains):
             out.write(f"{indent1}{cert_domain}\n")
 
         out.write("\nasn信息(暂未实现):\n")
 
-        # 重复网站，URL前2空格，详细信息4空格，二级详细信息8空格
         out.write(f"\n{'='*30}\n重复网站:\n{'='*30}\n\n")
-        indent3 = indent2 * 2  # 8空格
+        indent3 = indent2 * 2
         for key, url_infos in repeat_map.items():
             if len(url_infos) > 1:
                 main_url, main_title, *_ = url_infos[0]
                 out.write(f"{indent1}- 重复于: {main_url}  标题: {main_title}\n")
-                for url, title, cert, ico, body_hash,ico_mmh3,bd_mmh3 in url_infos:
+                for url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3 in url_infos:
                     url_ips = titles.get(url, ("", "", "", "", ()))[-1]
                     out.write(f"{indent2}- {url}\n")
                     out.write(f"{indent3}标题: {title}\n")
-                    # out.write(f"{indent3}证书: {cert}\n")
-                    # out.write(f"{indent3}ico: {ico}\n")
-                    # out.write(f"{indent3}body_hash: {body_hash}\n")
-                    # out.write(f"{indent3}IP: {', '.join(url_ips)}\n\n")
 
-        # 添加额外写入功能：域名反查扩展写入
     if all_reverse_domains or all_icos_mmh3 or all_body_mmh3 or cert_root_domains:
-        # 写入拓展信息（fofa icon_hash、body_hash、反查域名根）
         await write_expanded_reports(
             report_folder,
             ico_mmh3_set=all_icos_mmh3,
             body_mmh3_set=all_body_mmh3,
             domain_list=all_reverse_domains,
-            use_hunter=False,           # 用 Hunter 查询 暂不启用
-            hunter_proxies=hunter_proxies,  # 传代理
+            use_hunter=False,
+            hunter_proxies=None,
             hunter_ico_md5_list=all_icos,
-            cert_root_domains=cert_root_domains  # 你需要支持传这个参数
-
+            cert_root_domains=cert_root_domains,
+            cert_root_domain_map=cert_root_url_map,
+            ico_md5_url_map=ico_md5_url_map,
+            ico_mmh3_url_map=ico_mmh3_url_map,
+            body_md5_url_map=body_md5_url_map,
+            body_mmh3_url_map=body_mmh3_url_map,
         )
         await merge_all_expanded_results(report_folder, root)
-
 
 
 async def write_representative_urls(folder, titles, urls):
@@ -1024,7 +1005,7 @@ async def run_security_scans(root, folder, report_folder):
     afrog_report = report_folder / f"afrog_report_{root}.json"
     fscan_report = report_folder / f"fscan_result_{root}.txt"
     afrog_target_file = folder / "representative_urls.txt"
-
+    fscan_target_file = folder / "a_records.txt"
     if not afrog_target_file.exists() or os.path.getsize(afrog_target_file) == 0:
         empty_file = report_folder / "afrog目标为空.txt"
         empty_file.touch()  # 创建空文件
