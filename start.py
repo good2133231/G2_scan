@@ -53,13 +53,18 @@ DYNAMIC_FILTER_FILE = Path("file/filter/filter_domains-动态.txt")
 new_filtered_domains = set()
 
 # 1. 读取已有的动态过滤域名
+# ✅ 同步读取方式，最简单稳定（推荐用于非async程序）
 if DYNAMIC_FILTER_FILE.exists():
-    with open(DYNAMIC_FILTER_FILE, "r", encoding="utf-8") as f:
-        dynamic_filtered = {line.strip().lower() for line in f if line.strip()}
-        new_filtered_domains.update(dynamic_filtered)
-else:
-    dynamic_filtered = set()
-
+    with open(DYNAMIC_FILTER_FILE, mode='r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip().strip('"').strip("'").lower()
+            if line:
+                new_filtered_domains.add(line)
+black_titles = {
+        "Just a moment...",
+        "Attention Required! | Cloudflare",
+        "安全验证", 
+}
 
 #过滤
 FILTER_DOMAIN_PATH = "file/filter/filter-domain.txt"
@@ -78,6 +83,7 @@ HUNTER_API_KEY = ""
 executor = ThreadPoolExecutor(max_workers=10)  # 线程池大小可调
 semaphore = asyncio.Semaphore(5)  # 限制并发请求数
 dns_cache = {}
+
 def handle_sigint(signum, frame):
     global SKIP_CURRENT_DOMAIN
     print("\n[!] 收到 Ctrl+C，跳过当前域名，继续下一个...")
@@ -102,51 +108,56 @@ def is_domain_resolvable(domain):
 # ------------------------------------
 def reverse_lookup_ip_sync(ip):
     print("[>] 使用 dnsdblookup 反查域名接口")
-    # 备用用 ip138 获取绑定域名（ip138 不提供API，这里只是简单爬取）
     try:
         url_d = f"https://dnsdblookup.com/{ip}/"
         res = requests.get(url_d, headers=headers_lib(), timeout=5)
-        site = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res.text, re.S)
-        # site 格式示例： [(时间段, 路径, 域名), ...]
+        domains = [domain for _, _, domain in site]
 
-        # 只取域名和时间段的第一个时间，用于过滤
-        current_year = datetime.now().year
-        filter_year = current_year - 1
-
-        # 如果超过50条，过滤时间早于 filter_year 的
-        if len(site) > 50:
-            filtered = []
-            for date_range, path, domain in site:
-                # date_range 格式示例："2025-02-19-----2025-03-12"
-                start_date_str = date_range.split('-----')[0]
-                try:
-                    start_year = int(start_date_str[:4])
-                except Exception:
-                    start_year = 0  # 解析异常当作很旧的年份
-
-                if start_year >= filter_year:
-                    filtered.append(domain)
-            domains = filtered
-        else:
-            domains = [domain for _, _, domain in site]
+        # 去重，避免重复域名影响后续逻辑
+        domains = list(set(domains))
 
         if domains:
             return ip, domains
         else:
             return ip, []
+
     except Exception as e:
         print(f"[!] dnsdblookup 反查失败: {e}")
         try:
             print("[>] 使用 RapidDns 反查域名接口")
-
-            # 先调用 RapidDns.sameip (请替换为你自己的实现)
             domains = RapidDns.sameip(ip)
-            return ip, domains
+            # 格式统一为扁平化字符串列表
+            flat_domains = [item[0] if isinstance(item, list) else item for item in domains]
+            return ip, list(set(flat_domains))
+
         except Exception as e:
             print(f"[!] RapidDns 反查失败: {ip}, 错误: {e}")
-        # print("[>] 使用 ipinfo.io 反查域名接口")
+            print("[>] 使用 ip138 反查域名接口")
+            try:
+                url_d_138 = f"https://ip138.com/{ip}/"
+                res_138 = requests.get(url_d_138, headers=headers_lib(), timeout=5)
+                site_138 = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res_138.text, re.S)
+
+                # 不做时间过滤，直接全部域名
+                domains = [domain_138 for _, _, domain_138 in site_138]
+                domains = list(set(domains))
+
+                if domains:
+                    return ip, domains
+                else:
+                    return ip, []
+            except Exception as e:
+                print(f"[!] ip138 反查失败: {e}")
+                return ip, []
+
+
         return ip, []
+
     return ip, None
+et(url_d, headers=headers_lib(), timeout=5)
+        site = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res.text, re.S)
+
+        # 不做时间过滤，直
 # 异步执行命令
 async def run_cmd_async(cmd):
     if DEBUG_FSCAN:
@@ -485,8 +496,8 @@ def is_cdn_ip_new(ip, domains):
     # print(f"[+] 判断IP: {ip} 是否是CDN节点")
     
     # 条件1：域名数量过多，直接判定为CDN
-    if len(domains) > 50:
-        print(f"[-] 域名数量太多({len(domains)}), 直接判定为CDN")
+    if len(domains) > 45:
+        print(f"[-] 域名数量大于45), 直接判定为CDN")
         return True
 
     # 随机选一个域名做测试
@@ -522,7 +533,6 @@ async def resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn
             print(f"[!] {ip_} 反查无结果")
             continue
 
-        print(f"[✓] {ip_} 反查到域名数: {len(domains)}")
 
 
 
@@ -535,6 +545,8 @@ async def resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn
         is_cdn = False
         for d in domains:
             try:
+                if isinstance(d, list):  # 修复点
+                    d = d[0]
                 domain_line = d.strip()
                 match = re.search(r'([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}', domain_line)
                 if not match:
@@ -654,7 +666,8 @@ async def query_platform_by_hash(hash_value, platform="fofa", hash_type="icon_ha
 def is_ip(string):
     return re.match(r"^\d{1,3}(\.\d{1,3}){3}$", string) is not None
 def clean_line(line):
-    return line.strip().strip('"').strip("'").strip()
+    return line.strip().strip('"').strip("'").lower()
+
 async def read_lines_from_file(filepath):
     lines = set()
     if os.path.exists(filepath):
@@ -787,7 +800,8 @@ async def save_fofa_query_blacklist(blacklist: set[str]):
         for item in sorted(blacklist):
             await f.write(f"{item}\n")
 
-async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set=None, domain_list=None, use_hunter=False, hunter_proxies=None, hunter_ico_md5_list=None, cert_root_domains=None, cert_root_domain_map=None, ico_md5_url_map=None, ico_mmh3_url_map=None, body_md5_url_map=None, body_mmh3_url_map=None):
+async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set=None, domain_list=None, use_hunter=False, hunter_proxies=None, hunter_ico_md5_list=None, cert_root_domains=None, cert_root_domain_map=None, ico_md5_url_map=None, ico_mmh3_url_map=None, body_md5_url_map=None, body_mmh3_url_map=None,enable_fofa: bool = True):
+
     tuozhan_dir = Path(report_folder) / "tuozhan"
     fofa_dir = tuozhan_dir / "fofa"
     ip_re_dir = tuozhan_dir / "ip_re"
@@ -796,8 +810,9 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
     fofa_dir.mkdir(parents=True, exist_ok=True)
     ip_re_dir.mkdir(parents=True, exist_ok=True)
     all_tuozhan_dir.mkdir(parents=True, exist_ok=True)
-    updated_blacklist = set()  # ✅ 定义用于本次新增的黑名单条目
+    updated_blacklist = set()
     fofa_blacklist = await load_fofa_query_blacklist()
+
     if use_hunter:
         hunter_dir = tuozhan_dir / "hunter"
         hunter_dir.mkdir(parents=True, exist_ok=True)
@@ -817,6 +832,7 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                             hash_type="icon_md5",
                             proxies=hunter_proxies
                         )
+                        updated_blacklist.add(md5_hash)
                     except Exception as e:
                         print(f"[!] Hunter 查询失败: {e}")
                         continue
@@ -830,31 +846,32 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                         for domain in domains:
                             f.write(f"{domain}\n")
             else:
-                if hash_value in fofa_blacklist:
-                    print(f"[!] 跳过 FOFA 查询 (黑名单): icon_hash={hash_value}")
-                    continue
-                print(f"[+] 查询 FOFA icon_hash={hash_value}")
-                try:
-                    domains = await query_platform_by_hash(
-                        hash_value,
-                        platform="fofa",
-                        hash_type="icon_hash"
-                    )
-                except Exception as e:
-                    print(f"[!] FOFA 查询失败: {e}")
-                    continue
-                if not domains:
-                    continue
-                file_path = fofa_dir / f"icon_hash_{hash_value}.txt"
-                with open(file_path, "w", encoding="utf-8") as f:
-                    if ico_mmh3_url_map and hash_value in ico_mmh3_url_map:
-                        for src in sorted(ico_mmh3_url_map[hash_value]):
-                            f.write(f"# 来源: {src}\n")
-                    for domain in domains:
-                        f.write(f"{domain}\n")
-                updated_blacklist.add(hash_value)  # ✅ 加入黑名单
+                if enable_fofa:
+                    if hash_value in fofa_blacklist:
+                        print(f"[!] 跳过 FOFA 查询 (黑名单): icon_hash={hash_value}")
+                        continue
+                    print(f"[+] 查询 FOFA icon_hash={hash_value}")
+                    try:
+                        domains = await query_platform_by_hash(
+                            hash_value,
+                            platform="fofa",
+                            hash_type="icon_hash"
+                        )
+                        updated_blacklist.add(hash_value)
+                    except Exception as e:
+                        print(f"[!] FOFA 查询失败: {e}")
+                        continue
+                    if not domains:
+                        continue
+                    file_path = fofa_dir / f"icon_hash_{hash_value}.txt"
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        if ico_mmh3_url_map and hash_value in ico_mmh3_url_map:
+                            for src in sorted(ico_mmh3_url_map[hash_value]):
+                                f.write(f"# 来源: {src}\n")
+                        for domain in domains:
+                            f.write(f"{domain}\n")
 
-    if body_mmh3_set:
+    if body_mmh3_set and enable_fofa:
         for hash_value in sorted(body_mmh3_set):
             if hash_value in fofa_blacklist:
                 print(f"[!] 跳过 FOFA 查询 (黑名单): body_hash={hash_value}")
@@ -866,6 +883,7 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                     platform="fofa",
                     hash_type="body_hash"
                 )
+                updated_blacklist.add(hash_value)
             except Exception as e:
                 print(f"[!] FOFA 查询失败: {e}")
                 continue
@@ -878,9 +896,8 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                         f.write(f"# 来源: {src}\n")
                 for domain in domains:
                     f.write(f"{domain}\n")
-            updated_blacklist.add(hash_value)  # ✅
 
-    if cert_root_domains:
+    if cert_root_domains and enable_fofa:
         for domain in sorted(cert_root_domains):
             if domain in fofa_blacklist:
                 print(f"[!] 跳过 FOFA 查询 (黑名单): cert={domain}")
@@ -892,6 +909,7 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                     platform="fofa",
                     hash_type="cert"
                 )
+                updated_blacklist.add(domain)
             except Exception as e:
                 print(f"[!] FOFA 查询失败: cert={domain} 错误: {e}")
                 continue
@@ -904,7 +922,6 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                         f.write(f"# 来源: {src}\n")
                 for d in domains:
                     f.write(f"{d}\n")
-            updated_blacklist.add(domain)  # ✅
 
     if domain_list:
         root_domains = {extract_root_domain(d) for d in domain_list if d}
@@ -913,8 +930,9 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
             with open(out_file, "w", encoding="utf-8") as f:
                 for domain in sorted(root_domains):
                     f.write(f"{domain}\n")
+
     print("[+] 完成查询,开始汇总写入文件")
-    await save_fofa_query_blacklist(fofa_blacklist.union(updated_blacklist))  # ✅ 最后合并保存
+    await save_fofa_query_blacklist(fofa_blacklist.union(updated_blacklist))
 
 
 
@@ -1006,6 +1024,9 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
 
         # === 5. hash / cert 汇总 ===
         out.write(f"\n{'='*30}\n资源汇总:\n{'='*30}\n")
+        out.write("\n证书主域名:\n")
+        for cert_domain in sorted(cert_root_url_map.keys()):
+            out.write(f"{indent1}{cert_domain}\n")
         out.write("ico:\n")
         out.write(f"{indent1}md5:\n")
         for ico in sorted(all_icos):
@@ -1022,9 +1043,7 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
         for h in sorted(all_body_mmh3):
             out.write(f"{indent2}{h}\n")
 
-        out.write("\n证书主域名:\n")
-        for cert_domain in sorted(cert_root_url_map.keys()):
-            out.write(f"{indent1}{cert_domain}\n")
+
 
         out.write("\nasn信息(暂未实现):\n")
 
@@ -1055,6 +1074,8 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
             ico_mmh3_url_map=ico_mmh3_url_map,
             body_md5_url_map=body_md5_url_map,
             body_mmh3_url_map=body_mmh3_url_map,
+            enable_fofa=False
+
         )
 
         # === 8. 汇总 merge 报告 ===
@@ -1074,7 +1095,7 @@ async def write_representative_urls(folder, titles, urls):
         for url_list in repeat_map.values():
             if url_list:
                 url, title, *_ = url_list[0]
-                if title == "Just a moment...":
+                if title in black_titles:
                     continue
                 f.write(url + "\n")
 
