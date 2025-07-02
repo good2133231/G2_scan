@@ -52,6 +52,11 @@ CDN_DYNAMIC_PATH = "file/filter/cdn_动态添加_一年清一次.txt"
 DYNAMIC_FILTER_FILE = Path("file/filter/filter_domains-动态.txt")
 new_filtered_domains = set()
 
+black_titles = {
+        "Just a moment...",
+        "Attention Required! | Cloudflare",
+        "安全验证",  # 可根据你业务添加更多无效标题
+}
 # 1. 读取已有的动态过滤域名
 # ✅ 同步读取方式，最简单稳定（推荐用于非async程序）
 if DYNAMIC_FILTER_FILE.exists():
@@ -60,11 +65,7 @@ if DYNAMIC_FILTER_FILE.exists():
             line = line.strip().strip('"').strip("'").lower()
             if line:
                 new_filtered_domains.add(line)
-black_titles = {
-        "Just a moment...",
-        "Attention Required! | Cloudflare",
-        "安全验证", 
-}
+
 
 #过滤
 FILTER_DOMAIN_PATH = "file/filter/filter-domain.txt"
@@ -111,6 +112,8 @@ def reverse_lookup_ip_sync(ip):
     try:
         url_d = f"https://dnsdblookup.com/{ip}/"
         res = requests.get(url_d, headers=headers_lib(), timeout=5)
+        site = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res.text, re.S)
+
         domains = [domain for _, _, domain in site]
 
         # 去重，避免重复域名影响后续逻辑
@@ -154,10 +157,7 @@ def reverse_lookup_ip_sync(ip):
         return ip, []
 
     return ip, None
-et(url_d, headers=headers_lib(), timeout=5)
-        site = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res.text, re.S)
 
-        # 不做时间过滤，直
 # 异步执行命令
 async def run_cmd_async(cmd):
     if DEBUG_FSCAN:
@@ -427,13 +427,27 @@ def natural_sort_key(s):
 
 def write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips):
     valid_ips = []
-    with open(folder / "a_records.txt", "w") as a:
+
+    # 先读取 all_a_records.txt（如果存在）里的历史 IP
+    all_a_records_path = folder / "all_a_records.txt"
+    if all_a_records_path.exists():
+        with open(all_a_records_path, "r") as f:
+            existing_all_ips = set(line.strip() for line in f if line.strip())
+    else:
+        existing_all_ips = set()
+
+    with open(folder / "a_records.txt", "w") as a, open(all_a_records_path, "a") as all_a:
         for ip in sorted(ips):
             if is_cdn_ip(ip, cdn_ranges) or ip in existing_cdn_dyn_ips:
                 print(f"[-] CDN跳过: {ip}")
                 continue
+            if ip in existing_all_ips:
+                print(f"[!] 已存在于 all_a_records.txt 中，跳过: {ip}")
+                continue
             a.write(ip + "\n")
+            all_a.write(ip + "\n")
             valid_ips.append(ip)
+
     return valid_ips
 
 
