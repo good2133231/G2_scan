@@ -1,6 +1,0 @@
-[2025-06-27 06:50:47] [PORT] 目标:127.0.0.1 状态:open 详情:port=80
-[2025-06-27 06:50:47] [SERVICE] 目标:127.0.0.1 状态:identified 详情:server_info=map[content-length:942 content-type:text/html; charset=utf-8 date:Fri, 27 Jun 2025 06:50:47 GMT length:942 server:SimpleHTTP/0.6 Python/3.9.18 status_code:200 title:Directory listing for /], fingerprints=[], port=80, service=http, title=Directory listing for /, Url=http://127.0.0.1, status_code=200, length=942
-[2025-06-27 06:51:45] [PORT] 目标:127.0.0.1 状态:open 详情:port=80
-[2025-06-27 06:51:45] [SERVICE] 目标:127.0.0.1 状态:identified 详情:status_code=200, length=942, server_info=map[content-length:942 content-type:text/html; charset=utf-8 date:Fri, 27 Jun 2025 06:51:45 GMT length:942 server:SimpleHTTP/0.6 Python/3.9.18 status_code:200 title:Directory listing for /], fingerprints=[], port=80, service=http, title=Directory listing for /, Url=http://127.0.0.1
-[2025-06-27 06:52:30] [PORT] 目标:127.0.0.1 状态:open 详情:port=80
-[2025-06-27 06:52:30] [SERVICE] 目标:127.0.0.1 状态:identified 详情:status_code=200, length=942, server_info=map[content-length:942 content-type:text/html; charset=utf-8 date:Fri, 27 Jun 2025 06:52:30 GMT length:942 server:SimpleHTTP/0.6 Python/3.9.18 status_code:200 title:Directory listing for /], fingerprints=[], port=80, service=http, title=Directory listing for /, Url=http://127.0.0.1
