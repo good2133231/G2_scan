@@ -33,3 +33,9 @@ Thumbs.db
 # 工具缓存
 tools/scanner/.cache/
 .claude/
+
+# 忽略 config.ini 文件
+/config/api/config.ini
+
+# 忽略 url 文件
+/data/input/url
