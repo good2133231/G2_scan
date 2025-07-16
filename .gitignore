@@ -8,8 +8,6 @@ output/
 data/results/
 backup_*/
 
-# 配置文件中的敏感信息
-config/api/config.ini
 
 # Python缓存
 __pycache__/

@@ -479,7 +479,7 @@ async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter
         print("[✓] 完成反查域名")
         valid_ips = [ip for ip in valid_ips if ip not in cdn_ip_to_remove]
 
-        await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map, redirect_domains)
+        await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map, redirect_domains, filter_domains)
         await write_representative_urls(folder, titles, urls)
         if not ONLY_DOMAIN_MODE:
             await run_security_scans(root, folder, report_path)
@@ -501,7 +501,7 @@ async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter
             print(f"[+] 只有 base_info 文件，准备处理")
 
             # 无论如何都要处理扩展结果
-            await merge_all_expanded_results(str(report_path), root, redirect_domains)
+            await merge_all_expanded_results(str(report_path), root, redirect_domains, filter_domains)
 
             if ONLY_DOMAIN_MODE:
                 print(f"[i] 跳过 run_security_scans，因启用了 --test")
@@ -884,7 +884,9 @@ def strip_url_scheme(url: str) -> str:
         return parsed.hostname or url  # fallback
     return url
 
-async def merge_all_expanded_results(report_folder: str, root_domain: str, redirect_domains: set = None):
+async def merge_all_expanded_results(report_folder: str, root_domain: str, redirect_domains: set = None, filter_domains: set = None):
+    if filter_domains is None:
+        filter_domains = set()
     tuozhan_path = os.path.join(report_folder, "tuozhan")
     all_dir = os.path.join(tuozhan_path, "all_tuozhan")
     os.makedirs(all_dir, exist_ok=True)
@@ -1235,7 +1237,7 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
 
 
 
-async def write_base_report(root: str, report_folder: Path, valid_ips: set[str], urls: list[str], titles: dict, ip_domain_map: dict[str, list[str]], url_body_info_map: dict[str, dict], redirect_domains: set = None):
+async def write_base_report(root: str, report_folder: Path, valid_ips: set[str], urls: list[str], titles: dict, ip_domain_map: dict[str, list[str]], url_body_info_map: dict[str, dict], redirect_domains: set = None, filter_domains: set = None):
 
     all_icos = set()
     all_body_hashes = set()
@@ -1385,7 +1387,7 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
         )
 
     # === 8. 汇总 merge 报告 ===（移到条件外，确保总是执行）
-    await merge_all_expanded_results(report_folder, root, redirect_domains)
+    await merge_all_expanded_results(report_folder, root, redirect_domains, filter_domains)
 
 
 async def write_representative_urls(folder, titles, urls):

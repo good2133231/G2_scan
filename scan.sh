@@ -122,18 +122,18 @@ echo "💥 步骤2: 子域名爆破..."
 if [ "$USE_TEST_MODE" = true ]; then
     # 测试模式：只使用前100行字典
     head -100 "$CONFIG_DIR/subdomains.txt" > "$TEMP_DIR/test_subdomains.txt"
-    CMD="$TOOLS_DIR/puredns bruteforce $TEMP_DIR/test_subdomains.txt -d $TARGET_DOMAIN -r $CONFIG_DIR/resolvers.txt -q -w $TEMP_DIR/brute.txt"
+    CMD="$TOOLS_DIR/puredns bruteforce $TEMP_DIR/test_subdomains.txt $TARGET_DOMAIN -r $CONFIG_DIR/resolvers.txt -q -w $TEMP_DIR/brute.txt"
     log_command "$CMD" "子域名爆破(测试模式-100行字典)"
     $TOOLS_DIR/puredns bruteforce "$TEMP_DIR/test_subdomains.txt" \
-        -d "$TARGET_DOMAIN" \
+        "$TARGET_DOMAIN" \
         -r "$CONFIG_DIR/resolvers.txt" \
         -q -w "$TEMP_DIR/brute.txt" 2>&1 | tee -a "$LOG_FILE"
 else
     # 生产模式：使用完整字典
-    CMD="$TOOLS_DIR/puredns bruteforce $CONFIG_DIR/subdomains.txt -d $TARGET_DOMAIN -r $CONFIG_DIR/resolvers.txt -q -w $TEMP_DIR/brute.txt"
+    CMD="$TOOLS_DIR/puredns bruteforce $CONFIG_DIR/subdomains.txt $TARGET_DOMAIN -r $CONFIG_DIR/resolvers.txt -q -w $TEMP_DIR/brute.txt"
     log_command "$CMD" "子域名爆破(生产模式-完整字典)"
     $TOOLS_DIR/puredns bruteforce "$CONFIG_DIR/subdomains.txt" \
-        -d "$TARGET_DOMAIN" \
+        "$TARGET_DOMAIN" \
         -r "$CONFIG_DIR/resolvers.txt" \
         -q -w "$TEMP_DIR/brute.txt" 2>&1 | tee -a "$LOG_FILE"
 fi

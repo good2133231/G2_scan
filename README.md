@@ -157,17 +157,17 @@ echo "discovered-new-domain.com" > data/input/url
 
 ```bash
 # 1. 设置目标
-echo "vtmarkets.com" > data/input/url
+echo "example.com" > data/input/url
 
 # 2. 一层主扫描
 ./scan.sh
 
 # 3. 二层扩展扫描
-./expand.sh vtmarkets.com run
+./expand.sh example.com run
 
 # 4. 查看结果
-ls -la output/vtmarkets.com/
-ls -la output/expansions/vtmarkets.com/
+ls -la output/example.com/
+ls -la output/expansions/example.com/
 ```
 
 ### 场景2: 快速测试验证
