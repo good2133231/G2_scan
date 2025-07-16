@@ -276,12 +276,38 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
                             # 避免记录相同的根域名
                             original_root = get_fld(url, fix_protocol=False).lower()
                             if redirect_root != original_root:
-                                redirect_domains_set.add(redirect_root)
-                                if DEBUG_FSCAN:
-                                    print(f"[+] 发现跳转域名: {url} -> {redirect_url} (新域名: {redirect_root})")
+                                # 应用与body_domains相同的过滤逻辑
+                                if "cdn" not in redirect_root and "img" not in redirect_root:
+                                    try:
+                                        ext = tldextract.extract(redirect_root)
+                                        if ext.domain and ext.suffix and ext.suffix.lower() in VALID_TLDS:
+                                            filtered_redirect_root = f"{ext.domain}.{ext.suffix}".lower()
+                                            # 检查是否已在过滤列表中
+                                            if (filtered_redirect_root not in filter_domains and 
+                                                filtered_redirect_root not in new_filtered_domains and
+                                                filtered_redirect_root not in redirect_domains_set):
+                                                redirect_domains_set.add(filtered_redirect_root)
+                                                new_filtered_domains.add(filtered_redirect_root)
+                                                if DEBUG_FSCAN:
+                                                    print(f"[+] 发现跳转域名: {url} -> {redirect_url} (新域名: {filtered_redirect_root})")
+                                    except Exception:
+                                        pass
                         except Exception:
-                            # 如果无法提取根域名，直接使用hostname
-                            redirect_domains_set.add(redirect_hostname)
+                            # 如果无法提取根域名，使用hostname并应用过滤
+                            if "cdn" not in redirect_hostname and "img" not in redirect_hostname and "." in redirect_hostname:
+                                try:
+                                    ext = tldextract.extract(redirect_hostname)
+                                    if ext.domain and ext.suffix and ext.suffix.lower() in VALID_TLDS:
+                                        filtered_hostname = f"{ext.domain}.{ext.suffix}".lower()
+                                        if (filtered_hostname not in filter_domains and 
+                                            filtered_hostname not in new_filtered_domains and
+                                            filtered_hostname not in redirect_domains_set):
+                                            redirect_domains_set.add(filtered_hostname)
+                                            new_filtered_domains.add(filtered_hostname)
+                                            if DEBUG_FSCAN:
+                                                print(f"[+] 发现跳转域名: {url} -> {redirect_url} (新域名: {filtered_hostname})")
+                                except Exception:
+                                    pass
                 except Exception:
                     pass
 
@@ -915,7 +941,7 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
                 if root and root not in existing_urls_hosts and root != root_domain:
                     merged_roots.add(root)
 
-    # 🆕 添加从跳转发现的域名
+    # 🆕 添加从跳转发现的域名（已经在parse_json_lines_chunk中过滤过）
     if redirect_domains:
         redirect_count = 0
         for redirect_domain in redirect_domains:
@@ -923,10 +949,12 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
                 # 验证域名格式并排除与主域名相同的域名
                 if (not is_ip(redirect_domain) and '.' in redirect_domain and 
                     redirect_domain != root_domain):
-                    merged_roots.add(redirect_domain)
-                    redirect_count += 1
+                    # 再次检查过滤列表（双重保护）
+                    if redirect_domain not in filter_domains:
+                        merged_roots.add(redirect_domain)
+                        redirect_count += 1
         if redirect_count > 0:
-            print(f"[+] 从URL跳转发现 {redirect_count} 个新根域名（已排除与主域名重复）")
+            print(f"[+] 从URL跳转发现 {redirect_count} 个新根域名（已过滤并排除重复）")
 
     # ✅ 3. 重新设计文件输出格式 - 所有文件都包含来源信息
     merged_ips_with_source = []  # [(ip, source), ...]
