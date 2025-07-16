@@ -351,6 +351,7 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
             bd_hash = hash_info.get("body_md5", "").strip()
             bd_mmh3 = hash_info.get("body_mmh3", "").strip()
             a_ips = item.get("a", [])
+            content_length = item.get("content_length", 0)
 
             try:
                 parsed_url = urlparse(url)
@@ -389,7 +390,7 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
                 # 其他非正常状态码也记录
                 filtered_non_200_urls.append((url, status_code))
                 continue  # 跳过后续正常流程
-            url_title_list.append((url, title, cert, ico, bd_hash, tuple(sorted(a_ips)),ico_mmh3,bd_mmh3))
+            url_title_list.append((url, title, cert, ico, bd_hash, tuple(sorted(a_ips)),ico_mmh3,bd_mmh3,content_length))
 
             for ip in a_ips:
                 if is_cdn_ip(ip, cdn_ranges):
@@ -545,6 +546,9 @@ async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter
 
             # 无论如何都要处理扩展结果
             await merge_all_expanded_results(str(report_path), root, redirect_domains, filter_domains)
+
+            # 生成 representative_urls.txt（测试模式也需要）
+            await write_representative_urls(folder, titles, urls)
 
             if ONLY_DOMAIN_MODE:
                 print(f"[i] 跳过 run_security_scans，因启用了 --test")
@@ -1365,20 +1369,20 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
         # === 2. URL 标题信息 & hash 分类 ===
         out.write("\nURL和标题:\n")
         for url in urls:
-            title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3 = titles.get(url, ("", "", "", "", (), "", ""))
+            title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3, content_length = titles.get(url, ("", "", "", "", (), "", "", 0))
             # 改进重复检测逻辑：主要基于body_hash和title，减少过度细分
             # 如果title为空或是通用错误页面，则主要用body_hash
             if not title or title in black_titles or title in ["403 Forbidden", "404 Not Found", "", "301 Moved Permanently"]:
-                key = (bd_mmh3, body_hash)  # 主要基于内容hash
+                key = (bd_mmh3, body_hash, content_length)  # 主要基于内容hash + 长度
             else:
-                key = (title, bd_mmh3)  # 基于标题和内容hash
-            repeat_map[key].append((url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3))
+                key = (title, bd_mmh3, content_length)  # 基于标题和内容hash + 长度
+            repeat_map[key].append((url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3, content_length))
 
         for url_list in repeat_map.values():
-            for i, (url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3) in enumerate(url_list):
+            for i, (url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3, content_length) in enumerate(url_list):
                 if i > 0:
                     continue
-                out.write(f"{indent1}- {url} [{title}]\n")
+                out.write(f"{indent1}- {url} [{title}][size:{content_length}]\n")
                 if ico:
                     all_icos.add(ico)
                     ico_md5_url_map[ico].add(url)
@@ -1457,11 +1461,11 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
         indent3 = indent2 * 2
         for key, url_infos in repeat_map.items():
             if len(url_infos) > 1:
-                main_url, main_title, *_ = url_infos[0]
+                main_url, main_title, *_, main_content_length = url_infos[0]
                 out.write(f"{indent1}- 重复于: {main_url}  标题: {main_title}\n")
-                for url, title, *_ in url_infos:
+                for url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3, content_length in url_infos:
                     out.write(f"{indent2}- {url}\n")
-                    out.write(f"{indent3}标题: {title}\n")
+                    out.write(f"{indent3}标题: {title}[size:{content_length}]\n")
 
     # === 7. 写入扩展查询结果（FOFA / hunter）===
     if all_reverse_domains or all_icos_mmh3 or all_body_mmh3 or cert_root_url_map or all_titles:
@@ -1490,24 +1494,46 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
 
 
 async def write_representative_urls(folder, titles, urls):
+    print(f"[DEBUG] write_representative_urls 被调用")
+    print(f"[DEBUG] 输入参数: folder={folder}, urls数量={len(urls)}, titles数量={len(titles)}")
+    print(f"[DEBUG] 前5个URL: {urls[:5] if urls else '无URL'}")
+    
     input_folder = folder / "input"
     input_folder.mkdir(exist_ok=True)
     path = input_folder / "representative_urls.txt"
+    
+    print(f"[DEBUG] 将要写入文件: {path}")
     
     written_urls = []
     filtered_urls = []
     
     with open(path, "w", encoding="utf-8") as f:
-        for url in urls:
-            title, *_ = titles.get(url, ("", "", "", "", (), "", ""))
+        for i, url in enumerate(urls):
+            title, *_ = titles.get(url, ("", "", "", "", (), "", "", 0))
+            print(f"[DEBUG] 处理URL {i+1}/{len(urls)}: {url} - 标题: '{title}'")
+            
             # 只过滤真正的黑名单标题，空标题和其他标题都写入
             if title in black_titles:
+                print(f"[DEBUG] 过滤黑名单标题: {title}")
                 filtered_urls.append((url, title))
                 continue
             f.write(url + "\n")
             written_urls.append((url, title))
+            print(f"[DEBUG] 写入URL: {url}")
     
     print(f"[+] representative_urls.txt: 写入 {len(written_urls)} 个URL, 过滤 {len(filtered_urls)} 个黑名单URL")
+    print(f"[DEBUG] 文件最终路径: {path}")
+    
+    # 验证文件是否真的写入成功
+    if path.exists():
+        with open(path, "r") as f:
+            content = f.read().strip()
+            lines = content.split('\n') if content else []
+            print(f"[DEBUG] 文件验证成功，实际内容行数: {len(lines)}")
+            if lines:
+                print(f"[DEBUG] 前3行内容: {lines[:3]}")
+    else:
+        print(f"[ERROR] 文件未创建成功: {path}")
 
 
 async def run_security_scans(root, folder, report_folder):
@@ -1787,8 +1813,8 @@ def main():
     for url, root_domain in url_root_map.items():
         domain_urls_map[root_domain].add(url)
 
-    for url, title, cert, ico, body, url_ips,ico_mmh3,bd_mmh3 in url_title_list:
-        domain_titles_map[url] = (title, cert, ico, body, url_ips,ico_mmh3,bd_mmh3)
+    for url, title, cert, ico, body, url_ips,ico_mmh3,bd_mmh3,content_length in url_title_list:
+        domain_titles_map[url] = (title, cert, ico, body, url_ips,ico_mmh3,bd_mmh3,content_length)
 
     #403
     save_non_200_urls_by_domain(non_200_urls_all, url_root_map)
@@ -1821,7 +1847,7 @@ async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cd
         try:
             ips = domain_ip_map[domain]
             urls = sorted(domain_urls_map.get(domain, []))
-            titles = {u: domain_titles_map.get(u, ("", "", "", "", (), "", "")) for u in urls}
+            titles = {u: domain_titles_map.get(u, ("", "", "", "", (), "", "", 0)) for u in urls}
             await per_domain_flow_sync_async(domain, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains)
         except asyncio.CancelledError:
             print(f"[!] 当前任务被取消: {domain}")
