@@ -122,57 +122,88 @@ def is_domain_resolvable(domain):
         return False
 # ------------------------------------
 async def reverse_lookup_ip_async(ip):
-    print("[>] 使用 dnsdblookup 反查域名接口")
+    """IP反查函数，带超时和错误处理"""
+    print(f"[>] 开始反查IP: {ip}")
+    
+    # 方法1: dnsdblookup
     try:
+        print(f"[>] 使用 dnsdblookup 反查域名接口: {ip}")
         url_d = f"https://dnsdblookup.com/{ip}/"
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             res = await client.get(url_d, headers=headers_lib())
         site = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res.text, re.S)
 
         domains = [domain for _, _, domain in site]
-
-        # 去重，避免重复域名影响后续逻辑
         domains = list(set(domains))
 
         if domains:
+            print(f"[✓] dnsdblookup 成功反查到 {len(domains)} 个域名: {ip}")
             return ip, domains
-        else:
-            return ip, []
-
     except Exception as e:
-        print(f"[!] dnsdblookup 反查失败: {e}")
-        try:
-            print("[>] 使用 RapidDns 反查域名接口")
-            domains = RapidDns.sameip(ip)
-            # 格式统一为扁平化字符串列表
-            flat_domains = [item[0] if isinstance(item, list) else item for item in domains]
-            return ip, list(set(flat_domains))
+        print(f"[!] dnsdblookup 反查失败: {ip} - {e}")
 
-        except Exception as e:
-            print(f"[!] RapidDns 反查失败: {ip}, 错误: {e}")
-            print("[>] 使用 ip138 反查域名接口")
+    # 方法2: RapidDns (在线程池中运行，避免阻塞)
+    try:
+        print(f"[>] 使用 RapidDns 反查域名接口: {ip}")
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = loop.run_in_executor(executor, RapidDns.sameip, ip)
             try:
-                url_d_138 = f"https://ip138.com/{ip}/"
-                async with httpx.AsyncClient(timeout=5) as client:
-                    res_138 = await client.get(url_d_138, headers=headers_lib())
-                site_138 = re.findall(r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>', res_138.text, re.S)
-
-                # 不做时间过滤，直接全部域名
-                domains = [domain_138 for _, _, domain_138 in site_138]
-                domains = list(set(domains))
-
+                domains = await asyncio.wait_for(future, timeout=15)  # 15秒超时
                 if domains:
-                    return ip, domains
+                    # 格式统一为扁平化字符串列表
+                    flat_domains = []
+                    for item in domains:
+                        if isinstance(item, (list, tuple)):
+                            flat_domains.append(item[0] if item else "")
+                        else:
+                            flat_domains.append(str(item))
+                    
+                    flat_domains = [d for d in flat_domains if d.strip()]
+                    flat_domains = list(set(flat_domains))
+                    
+                    if flat_domains:
+                        print(f"[✓] RapidDns 成功反查到 {len(flat_domains)} 个域名: {ip}")
+                        return ip, flat_domains
+            except asyncio.TimeoutError:
+                print(f"[!] RapidDns 反查超时(15秒): {ip}")
+    except Exception as e:
+        print(f"[!] RapidDns 反查失败: {ip} - {e}")
+
+    # 方法3: ip138 (备用方案)
+    try:
+        print(f"[>] 使用 ip138 反查域名接口: {ip}")
+        url_d_138 = f"https://ip138.com/{ip}/"
+        async with httpx.AsyncClient(timeout=10) as client:
+            res_138 = await client.get(url_d_138, headers=headers_lib())
+        
+        # 尝试多种正则表达式匹配模式
+        patterns = [
+            r'<span class="date">(.*?)</span><a href="/(.*?)/" target="_blank">(.*?)</a>',
+            r'<a[^>]*href="[^"]*"[^>]*>([\w\.-]+\.[a-zA-Z]{2,})</a>',
+            r'([\w\.-]+\.[a-zA-Z]{2,})'
+        ]
+        
+        domains = []
+        for pattern in patterns:
+            matches = re.findall(pattern, res_138.text, re.S)
+            if matches:
+                if isinstance(matches[0], tuple):
+                    domains.extend([match[-1] for match in matches])
                 else:
-                    return ip, []
-            except Exception as e:
-                print(f"[!] ip138 反查失败: {e}")
-                return ip, []
+                    domains.extend(matches)
+                break
+        
+        domains = list(set([d.strip() for d in domains if d.strip() and '.' in d]))
+        
+        if domains:
+            print(f"[✓] ip138 成功反查到 {len(domains)} 个域名: {ip}")
+            return ip, domains
+    except Exception as e:
+        print(f"[!] ip138 反查失败: {ip} - {e}")
 
-
-        return ip, []
-
-    return ip, None
+    print(f"[!] 所有反查方法均失败: {ip}")
+    return ip, []
 
 # 异步执行命令
 async def run_cmd_async(cmd):
@@ -692,19 +723,61 @@ def is_cdn_ip_new(ip, domains):
 async def resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn_ips, folder):
     global reverse_lookup_semaphore
     if reverse_lookup_semaphore is None:
-        reverse_lookup_semaphore = asyncio.Semaphore(3)  # 限制并发反查数量
+        reverse_lookup_semaphore = asyncio.Semaphore(3)  # 适当并发数
     
     ip_domain_map = defaultdict(list)
     cdn_ip_to_remove = set()
     
-    # 使用异步并发处理反查
-    async def process_ip(ip):
-        async with reverse_lookup_semaphore:
-            return await reverse_lookup_ip_async(ip)
+    print(f"[*] 开始反查 {len(valid_ips)} 个IP地址...")
+    print(f"[*] 使用 3 个并发连接，每个IP最大超时 45秒")
     
-    # 并发执行所有IP反查
-    tasks = [process_ip(ip) for ip in valid_ips]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # 使用异步并发处理反查
+    successful_lookups = 0
+    failed_lookups = 0
+    
+    async def process_ip(ip):
+        nonlocal successful_lookups, failed_lookups
+        async with reverse_lookup_semaphore:
+            try:
+                # 为每个IP设置最大45秒超时
+                result = await asyncio.wait_for(reverse_lookup_ip_async(ip), timeout=45)
+                if result[1]:  # 如果有域名结果
+                    successful_lookups += 1
+                    print(f"[✓] 进度: {successful_lookups + failed_lookups}/{len(valid_ips)} (成功: {successful_lookups})")
+                else:
+                    failed_lookups += 1
+                return result
+            except asyncio.TimeoutError:
+                failed_lookups += 1
+                print(f"[!] IP {ip} 反查总体超时(45秒)")
+                return ip, []
+            except Exception as e:
+                failed_lookups += 1
+                print(f"[!] IP {ip} 反查异常: {e}")
+                return ip, []
+    
+    # 分批处理IP，避免一次性创建太多任务
+    batch_size = 10
+    all_results = []
+    
+    for i in range(0, len(valid_ips), batch_size):
+        batch_ips = valid_ips[i:i+batch_size]
+        print(f"[*] 处理IP批次 {i//batch_size + 1}/{(len(valid_ips)-1)//batch_size + 1}: {len(batch_ips)} 个IP")
+        
+        tasks = [process_ip(ip) for ip in batch_ips]
+        try:
+            # 每批最大8分钟超时
+            batch_results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True), 
+                timeout=480  # 8分钟批次超时
+            )
+            all_results.extend(batch_results)
+        except asyncio.TimeoutError:
+            print(f"[!] IP批次 {i//batch_size + 1} 超时，跳过该批次")
+            # 为超时的IP添加空结果
+            all_results.extend([(ip, []) for ip in batch_ips])
+    
+    results = all_results
     
     for i, result in enumerate(results):
         if isinstance(result, Exception):
@@ -760,6 +833,15 @@ async def resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn
                 f.write(f"{ip}\n")
         existing_cdn_dyn_ips.update(new_cdn_ips)
         update_a_records_after_scan(cdn_ip_to_remove, folder)
+
+    # 输出反查总结
+    total_domains_found = sum(len(domains) for domains in ip_domain_map.values())
+    print(f"\n[✓] IP反查完成!")
+    print(f"    - 总IP数: {len(valid_ips)}")
+    print(f"    - 成功反查: {successful_lookups}")
+    print(f"    - 失败/无结果: {failed_lookups}")
+    print(f"    - 发现域名总数: {total_domains_found}")
+    print(f"    - 识别CDN IP: {len(cdn_ip_to_remove)}")
 
     return ip_domain_map, cdn_ip_to_remove
 

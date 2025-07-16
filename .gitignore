@@ -8,6 +8,8 @@ output/
 data/results/
 backup_*/
 
+#claude配置
+CLAUDE.md
 
 # Python缓存
 __pycache__/
