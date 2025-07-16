@@ -1490,19 +1490,6 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
 
 
 async def write_representative_urls(folder, titles, urls):
-    repeat_map = defaultdict(list)
-    for url in urls:
-        title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3 = titles.get(url, ("", "", "", "", (), "", ""))
-        a_str = ",".join(sorted(url_ips))
-        
-        # 如果关键信息都为空，使用URL本身作为唯一标识，避免误判为重复
-        if not body_hash and not cert and not a_str and not ico:
-            key = ("unique_url", url)  # 每个URL都有唯一key
-        else:
-            key = (body_hash, cert, a_str, ico)
-            
-        repeat_map[key].append((url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3))
-
     input_folder = folder / "input"
     input_folder.mkdir(exist_ok=True)
     path = input_folder / "representative_urls.txt"
@@ -1511,37 +1498,16 @@ async def write_representative_urls(folder, titles, urls):
     filtered_urls = []
     
     with open(path, "w", encoding="utf-8") as f:
-        for url_list in repeat_map.values():
-            if url_list:
-                url, title, *_ = url_list[0]
-                if title in black_titles:
-                    filtered_urls.append((url, title))
-                    continue
-                f.write(url + "\n")
-                written_urls.append((url, title))
+        for url in urls:
+            title, *_ = titles.get(url, ("", "", "", "", (), "", ""))
+            # 只过滤真正的黑名单标题，空标题和其他标题都写入
+            if title in black_titles:
+                filtered_urls.append((url, title))
+                continue
+            f.write(url + "\n")
+            written_urls.append((url, title))
     
-    # 如果没有有效URL被写入，选择一些非黑名单的URL或至少写入一些URL
-    if not written_urls:
-        print(f"[!] 所有URL被标题过滤，尝试写入备用URL...")
-        with open(path, "w", encoding="utf-8") as f:
-            # 尝试找到一些状态码为200的URL
-            backup_urls = []
-            for url in urls:
-                title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3 = titles.get(url, ("", "", "", "", (), "", ""))
-                # 优先选择有内容的URL（非空标题且不是常见的错误页面）
-                if title and title not in black_titles and ("200" in title or "login" in title.lower() or "portal" in title.lower()):
-                    backup_urls.append((url, title))
-            
-            # 如果还是没有，至少写入一些URL
-            if not backup_urls:
-                backup_urls = [(url, titles.get(url, ("",))[0]) for url in urls[:5]]  # 取前5个
-            
-            for url, title in backup_urls[:10]:  # 最多写入10个
-                f.write(url + "\n")
-            
-            print(f"[+] 写入了 {len(backup_urls[:10])} 个备用URL到representative_urls.txt")
-    
-    print(f"[+] representative_urls.txt: 写入 {len(written_urls)} 个URL, 过滤 {len(filtered_urls)} 个URL")
+    print(f"[+] representative_urls.txt: 写入 {len(written_urls)} 个URL, 过滤 {len(filtered_urls)} 个黑名单URL")
 
 
 async def run_security_scans(root, folder, report_folder):
