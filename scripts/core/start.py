@@ -330,6 +330,15 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
             except ValueError:
                 try:
                     root_domain = get_fld(url, fix_protocol=False).lower()
+                    # 检查根域名是否在过滤列表中
+                    if root_domain in filter_domains:
+                        if DEBUG_FSCAN:
+                            print(f"[!] {root_domain} 域名被过滤了 (静态过滤列表)")
+                        continue
+                    if root_domain in new_filtered_domains:
+                        if DEBUG_FSCAN:
+                            print(f"[!] {root_domain} 域名被过滤了 (动态过滤列表)")
+                        continue
                 except Exception as e:
                     if DEBUG_FSCAN:
                         print(f"[!] 提取主域名失败: {url} 错误: {e}")
@@ -1404,27 +1413,47 @@ async def run_security_scans(root, folder, report_folder):
     fscan_report = report_folder / f"fscan_result_{root}.txt"
     afrog_target_file = folder / "input" / "representative_urls.txt"
     fscan_target_file = folder / "input" / "a_records.txt"
-    if not afrog_target_file.exists() or os.path.getsize(afrog_target_file) == 0:
+    print(f"[*] 检查afrog目标文件: {afrog_target_file}")
+    if not afrog_target_file.exists():
         empty_file = report_folder / "afrog目标为空.txt"
         empty_file.touch()  # 创建空文件
-        print(f"[!] {afrog_target_file} 为空，已创建 {empty_file}，跳过afrog扫描")
+        print(f"[!] afrog目标文件不存在: {afrog_target_file}，已创建 {empty_file}，跳过afrog扫描")
+    elif os.path.getsize(afrog_target_file) == 0:
+        empty_file = report_folder / "afrog目标为空.txt"
+        empty_file.touch()  # 创建空文件
+        print(f"[!] afrog目标文件为空: {afrog_target_file}，已创建 {empty_file}，跳过afrog扫描")
     else:
+        target_count = sum(1 for line in open(afrog_target_file, 'r') if line.strip())
+        print(f"[+] afrog目标文件有效，包含 {target_count} 个URL目标")
         afrog_cmd = AFROG_CMD_TEMPLATE.format(target_file=str(afrog_target_file), output_file=str(afrog_report))
+        print(f"[*] 执行afrog扫描命令: {afrog_cmd}")
         result = await run_cmd_async(afrog_cmd)
         if result is None:
             print(f"[!] afrog扫描失败，跳过")
             return
+        else:
+            print(f"[✓] afrog扫描完成，报告保存至: {afrog_report}")
 
-    if not fscan_target_file.exists() or os.path.getsize(fscan_target_file) == 0:
+    print(f"[*] 检查fscan目标文件: {fscan_target_file}")
+    if not fscan_target_file.exists():
         empty_file = report_folder / "fscan目标为空.txt"
         empty_file.touch()
-        print(f"[!] {fscan_target_file} 为空，已创建 {empty_file}，跳过fscan扫描")
+        print(f"[!] fscan目标文件不存在: {fscan_target_file}，已创建 {empty_file}，跳过fscan扫描")
+    elif os.path.getsize(fscan_target_file) == 0:
+        empty_file = report_folder / "fscan目标为空.txt"
+        empty_file.touch()
+        print(f"[!] fscan目标文件为空: {fscan_target_file}，已创建 {empty_file}，跳过fscan扫描")
     else:
+        target_count = sum(1 for line in open(fscan_target_file, 'r') if line.strip())
+        print(f"[+] fscan目标文件有效，包含 {target_count} 个IP目标")
         fscan_cmd = FSCAN_CMD_TEMPLATE.format(target_file=str(fscan_target_file), output_file=str(fscan_report))
+        print(f"[*] 执行fscan扫描命令: {fscan_cmd}")
         result = await run_cmd_async(fscan_cmd)
         if result is None:
             print(f"[!] fscan扫描失败，跳过")
             return
+        else:
+            print(f"[✓] fscan扫描完成，报告保存至: {fscan_report}")
     await finalize_report_directory(report_folder, root)
 
 

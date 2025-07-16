@@ -90,9 +90,22 @@ class ExpansionProcessor:
                     # 跳过所有注释行
                     if line.startswith("#"):
                         continue
-                    if line not in self.processed_ips:
-                        ip_targets.append((line, current_source))
-                        self.processed_ips.add(line)
+                    # 处理IP:PORT格式，只保留IP部分
+                    if ":" in line and not line.startswith("["):  # 排除IPv6格式
+                        clean_ip = line.split(":")[0]
+                    else:
+                        clean_ip = line
+                    
+                    # 验证IP格式
+                    try:
+                        import ipaddress
+                        ipaddress.ip_address(clean_ip)
+                        if clean_ip not in self.processed_ips:
+                            ip_targets.append((clean_ip, current_source))
+                            self.processed_ips.add(clean_ip)
+                    except ValueError:
+                        print(f"[!] 跳过无效IP格式: {line}")
+                        continue
         
         # 读取 urls.txt
         url_file = self.tuozhan_dir / "urls.txt"
