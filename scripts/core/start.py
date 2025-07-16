@@ -1657,6 +1657,97 @@ def save_non_200_urls_by_domain(non_200_urls_all, url_root_map):
 # 主程序入口
 # ------------------------------------
 # 主程序入口
+def generate_mock_data(target_domain):
+    """生成模拟JSON数据用于测试"""
+    if not target_domain:
+        target_domain = "example.com"
+    
+    print(f"[*] 为目标域名 {target_domain} 生成模拟数据...")
+    
+    # 确保temp目录存在
+    os.makedirs("temp", exist_ok=True)
+    
+    # 生成模拟数据
+    mock_data = []
+    
+    # 主域名
+    mock_data.append({
+        "url": f"https://{target_domain}",
+        "location": f"https://{target_domain}",
+        "title": f"{target_domain.split('.')[0].title()} Official Website",
+        "status_code": 200,
+        "content_length": 12345,
+        "body": f"<html><head><title>{target_domain}</title></head><body>Welcome to {target_domain}</body></html>",
+        "cert": {"subject": {"common_name": target_domain}},
+        "favicon": {"mmh3": "123456789"},
+        "a": ["192.168.1.100"],
+        "cname": []
+    })
+    
+    # www子域名
+    mock_data.append({
+        "url": f"https://www.{target_domain}",
+        "location": f"https://www.{target_domain}",
+        "title": f"www.{target_domain}",
+        "status_code": 200,
+        "content_length": 11234,
+        "body": f"<html><head><title>www.{target_domain}</title></head><body>Main website</body></html>",
+        "cert": {"subject": {"common_name": f"*.{target_domain}"}},
+        "favicon": {"mmh3": "987654321"},
+        "a": ["192.168.1.101"],
+        "cname": []
+    })
+    
+    # API子域名
+    mock_data.append({
+        "url": f"https://api.{target_domain}",
+        "location": f"https://api.{target_domain}",
+        "title": "API Gateway",
+        "status_code": 200,
+        "content_length": 567,
+        "body": '{"status":"ok","version":"1.0"}',
+        "cert": {"subject": {"common_name": f"api.{target_domain}"}},
+        "favicon": {"mmh3": "555666777"},
+        "a": ["192.168.1.102"],
+        "cname": []
+    })
+    
+    # 管理面板
+    mock_data.append({
+        "url": f"https://admin.{target_domain}",
+        "location": f"https://admin.{target_domain}/login",
+        "title": "Admin Panel - Login Required",
+        "status_code": 302,
+        "content_length": 1234,
+        "body": "<html><head><title>Admin Login</title></head><body>Please login</body></html>",
+        "cert": {"subject": {"common_name": f"admin.{target_domain}"}},
+        "favicon": {"mmh3": "111222333"},
+        "a": ["192.168.1.103"],
+        "cname": []
+    })
+    
+    # 邮件服务器
+    mock_data.append({
+        "url": f"https://mail.{target_domain}",
+        "location": f"https://mail.{target_domain}",
+        "title": "Webmail Login",
+        "status_code": 200,
+        "content_length": 5678,
+        "body": "<html><head><title>Webmail</title></head><body>Mail server</body></html>",
+        "cert": {"subject": {"common_name": f"mail.{target_domain}"}},
+        "favicon": {"mmh3": "444555666"},
+        "a": ["192.168.1.104"],
+        "cname": []
+    })
+    
+    # 写入模拟数据到JSON文件
+    with open(RESULT_JSON_PATH, "w", encoding="utf-8") as f:
+        for item in mock_data:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    
+    print(f"[✓] 已生成 {len(mock_data)} 条模拟数据到 {RESULT_JSON_PATH}")
+    print(f"[*] 包含域名: {[item['url'] for item in mock_data]}")
+
 def main():
     init_dirs()
     filter_domains = load_filter_domains(FILTER_DOMAIN_PATH)
@@ -1672,8 +1763,12 @@ def main():
         print(f"[*] 检测到目标域名: {target_domain}")
 
     if not os.path.exists(RESULT_JSON_PATH):
-        print("[X] 结果文件不存在")
-        return
+        if '-test' in sys.argv:
+            print("[*] 测试模式：生成模拟JSON数据")
+            generate_mock_data(target_domain)
+        else:
+            print("[X] 结果文件不存在")
+            return
 
     with open(RESULT_JSON_PATH, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -1730,13 +1825,9 @@ def main():
     print(f"\n{'='*50}")
     print(f"📊 域名过滤统计:")
     print(f"{'='*50}")
-    print(f"🔍 发现跳转域名: {len(redirect_domains_set)} 个")
-    print(f"🔥 Body_FQDN过滤: {len(body_fqdn_filtered_set)} 个")
-    print(f"🔥 Body_domains过滤: {len(body_domains_filtered_set)} 个")
-    if len(body_fqdn_filtered_set) > 0:
-        print(f"   过滤的FQDN示例: {list(body_fqdn_filtered_set)[:5]}")
-    if len(body_domains_filtered_set) > 0:
-        print(f"   过滤的域名示例: {list(body_domains_filtered_set)[:5]}")
+    print(f"🔍 发现跳转域名: {len(redirect_domains_all)} 个")
+    if len(redirect_domains_all) > 0:
+        print(f"   跳转域名示例: {list(redirect_domains_all)[:5]}")
     print(f"{'='*50}")
 
     
