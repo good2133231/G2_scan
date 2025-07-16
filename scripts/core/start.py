@@ -232,7 +232,7 @@ def is_cdn_ip(ip, cdn_ranges):
 
 # ------------------------------------
 # 多进程解析JSON块，增加  信息收集
-def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter_domains):
+def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter_domains, target_domain=None):
     domain_ip_map = defaultdict(set)
     url_title_list = []
     url_root_map = {}
@@ -330,12 +330,15 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
             except ValueError:
                 try:
                     root_domain = get_fld(url, fix_protocol=False).lower()
-                    # 检查根域名是否在过滤列表中
-                    if root_domain in filter_domains:
+                    # 检查根域名是否在过滤列表中（但不过滤目标域名本身）
+                    if target_domain and root_domain == target_domain.lower():
+                        # 目标域名本身不过滤
+                        pass
+                    elif root_domain in filter_domains:
                         if DEBUG_FSCAN:
                             print(f"[!] {root_domain} 域名被过滤了 (静态过滤列表)")
                         continue
-                    if root_domain in new_filtered_domains:
+                    elif root_domain in new_filtered_domains:
                         if DEBUG_FSCAN:
                             print(f"[!] {root_domain} 域名被过滤了 (动态过滤列表)")
                         continue
@@ -1535,6 +1538,14 @@ def main():
     cdn_ranges = load_cdn_ranges(CDN_LIST_PATH)
     existing_cdn_dyn_ips = {line.strip() for line in open(CDN_DYNAMIC_PATH, encoding="utf-8")} if os.path.exists(CDN_DYNAMIC_PATH) else set()
 
+    # 读取目标域名
+    target_domain = None
+    target_file_path = "data/input/url"
+    if os.path.exists(target_file_path):
+        with open(target_file_path, "r", encoding="utf-8") as f:
+            target_domain = f.read().strip()
+        print(f"[*] 检测到目标域名: {target_domain}")
+
     if not os.path.exists(RESULT_JSON_PATH):
         print("[X] 结果文件不存在")
         return
@@ -1552,7 +1563,8 @@ def main():
     worker = partial(parse_json_lines_chunk,
                      cdn_ranges=cdn_ranges,
                      existing_cdn_dyn_ips=existing_cdn_dyn_ips,
-                     filter_domains=filter_domains)
+                     filter_domains=filter_domains,
+                     target_domain=target_domain)
 
     pool = multiprocessing.Pool(cpu_count)
 

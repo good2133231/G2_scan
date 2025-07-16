@@ -157,28 +157,28 @@ echo "discovered-new-domain.com" > data/input/url
 
 ```bash
 # 1. 设置目标
-echo "example.com" > data/input/url
+echo "target.com" > data/input/url
 
 # 2. 一层主扫描
 ./scan.sh
 
 # 3. 二层扩展扫描
-./expand.sh example.com run
+./expand.sh target.com run
 
 # 4. 查看结果
-ls -la output/example.com/
-ls -la output/expansions/example.com/
+ls -la output/target.com/
+ls -la output/expansions/target.com/
 ```
 
 ### 场景2: 快速测试验证
 
 ```bash
 # 1. 测试模式一层扫描
-echo "example.com" > data/input/url
+echo "target.com" > data/input/url
 ./scan.sh --test
 
 # 2. 测试模式二层扫描
-./expand.sh example.com run --test
+./expand.sh target.com run --test
 ```
 
 ### 场景3: 批量目标处理
