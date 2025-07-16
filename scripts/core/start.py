@@ -433,6 +433,15 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
                     except Exception:
                         pass
 
+            # 统计过滤情况
+            original_fqdn_count = len(body_fqdn_list)
+            original_domains_count = len(body_domains_list)
+            filtered_fqdn_count = len(filtered_fqdn)
+            filtered_domains_count = len(filtered_domains)
+            
+            body_fqdn_filtered_set.update(set(body_fqdn_list) - set(filtered_fqdn))
+            body_domains_filtered_set.update(set(body_domains_list) - set(filtered_domains))
+            
             # 保存结果
             url_body_info_map[url] = {
                 "body_fqdn": filtered_fqdn,
@@ -1357,7 +1366,12 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
         out.write("\nURL和标题:\n")
         for url in urls:
             title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3 = titles.get(url, ("", "", "", "", (), "", ""))
-            key = (body_hash, cert, ",".join(sorted(url_ips)), ico, ico_mmh3, bd_mmh3)
+            # 改进重复检测逻辑：主要基于body_hash和title，减少过度细分
+            # 如果title为空或是通用错误页面，则主要用body_hash
+            if not title or title in black_titles or title in ["403 Forbidden", "404 Not Found", "", "301 Moved Permanently"]:
+                key = (bd_mmh3, body_hash)  # 主要基于内容hash
+            else:
+                key = (title, bd_mmh3)  # 基于标题和内容hash
             repeat_map[key].append((url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3))
 
         for url_list in repeat_map.values():
@@ -1486,13 +1500,42 @@ async def write_representative_urls(folder, titles, urls):
     input_folder = folder / "input"
     input_folder.mkdir(exist_ok=True)
     path = input_folder / "representative_urls.txt"
+    
+    written_urls = []
+    filtered_urls = []
+    
     with open(path, "w", encoding="utf-8") as f:
         for url_list in repeat_map.values():
             if url_list:
                 url, title, *_ = url_list[0]
                 if title in black_titles:
+                    filtered_urls.append((url, title))
                     continue
                 f.write(url + "\n")
+                written_urls.append((url, title))
+    
+    # 如果没有有效URL被写入，选择一些非黑名单的URL或至少写入一些URL
+    if not written_urls:
+        print(f"[!] 所有URL被标题过滤，尝试写入备用URL...")
+        with open(path, "w", encoding="utf-8") as f:
+            # 尝试找到一些状态码为200的URL
+            backup_urls = []
+            for url in urls:
+                title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3 = titles.get(url, ("", "", "", "", (), "", ""))
+                # 优先选择有内容的URL（非空标题且不是常见的错误页面）
+                if title and title not in black_titles and ("200" in title or "login" in title.lower() or "portal" in title.lower()):
+                    backup_urls.append((url, title))
+            
+            # 如果还是没有，至少写入一些URL
+            if not backup_urls:
+                backup_urls = [(url, titles.get(url, ("",))[0]) for url in urls[:5]]  # 取前5个
+            
+            for url, title in backup_urls[:10]:  # 最多写入10个
+                f.write(url + "\n")
+            
+            print(f"[+] 写入了 {len(backup_urls[:10])} 个备用URL到representative_urls.txt")
+    
+    print(f"[+] representative_urls.txt: 写入 {len(written_urls)} 个URL, 过滤 {len(filtered_urls)} 个URL")
 
 
 async def run_security_scans(root, folder, report_folder):
@@ -1683,6 +1726,18 @@ def main():
     #403
     save_non_200_urls_by_domain(non_200_urls_all, url_root_map)
 
+    # 输出过滤统计信息
+    print(f"\n{'='*50}")
+    print(f"📊 域名过滤统计:")
+    print(f"{'='*50}")
+    print(f"🔍 发现跳转域名: {len(redirect_domains_set)} 个")
+    print(f"🔥 Body_FQDN过滤: {len(body_fqdn_filtered_set)} 个")
+    print(f"🔥 Body_domains过滤: {len(body_domains_filtered_set)} 个")
+    if len(body_fqdn_filtered_set) > 0:
+        print(f"   过滤的FQDN示例: {list(body_fqdn_filtered_set)[:5]}")
+    if len(body_domains_filtered_set) > 0:
+        print(f"   过滤的域名示例: {list(body_domains_filtered_set)[:5]}")
+    print(f"{'='*50}")
 
     
     # 异步任务放到 asyncio.run 中执行
