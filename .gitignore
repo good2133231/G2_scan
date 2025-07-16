@@ -32,3 +32,4 @@ Thumbs.db
 
 # 工具缓存
 tools/scanner/.cache/
+.claude/
