@@ -1,280 +1,271 @@
 # 🚀 渗透测试自动化扫描平台
 
-一个完整的域名资产发现与漏洞扫描自动化平台，支持多代扫描、智能过滤和结果分析。
+一个简洁高效的域名资产发现与漏洞扫描自动化平台，专注核心功能。
 
 ## ✨ 核心特性
 
-- **🔍 全面的子域名发现**: 被动收集 + 主动爆破 + DNS解析验证
-- **🌐 HTTP服务探测**: 状态码识别、指纹识别、SSL证书抓取
-- **🛡️ 漏洞扫描**: 集成afrog漏洞扫描引擎
-- **🔄 多代扩展扫描**: 基于发现结果自动生成下一代扫描任务
-- **📊 智能数据分析**: 自动分类、过滤和报告生成
-- **🚮 智能清理**: 分类清理临时文件和分析结果
+- **🔍 完整扫描流程**: 子域名发现 → HTTP探测 → 漏洞扫描
+- **🔄 二层扩展扫描**: 基于一层结果自动扩展攻击面
+- **🧪 测试模式**: 精简参数快速验证流程
+- **🛡️ 漏洞检测**: 集成afrog和fscan工具
+- **🎯 智能过滤**: 自动过滤CDN和噪音数据
 
 ## 🏗️ 项目结构
 
 ```
 scan-platform/
-├── scan.sh                    # 🚀 主扫描脚本
-├── scan_fast.sh               # ⚡ 快速扫描脚本
-├── test.sh                    # 🧪 功能测试脚本
+├── scan.sh                    # 🚀 一层主扫描脚本
+├── expand.sh                  # 🔄 二层扩展扫描脚本
 ├── install.sh                 # 📦 工具安装脚本
 │
-├── tools/scanner/             # 🔧 扫描工具集
-│   ├── subfinder             # 子域名收集
-│   ├── puredns               # DNS解析/爆破
-│   ├── httpx                 # HTTP探测
-│   ├── afrog                 # 漏洞扫描
-│   └── fscan                 # 端口扫描
+├── config/                    # ⚙️ 配置文件
+│   ├── subdomains.txt         # 子域名字典
+│   ├── resolvers.txt          # DNS解析器
+│   ├── api/config.ini         # API配置
+│   └── filters/               # 过滤规则
 │
-├── config/                   # ⚙️ 配置文件
-│   ├── wordlists/           # 字典文件
-│   ├── filters/             # 过滤规则
-│   └── api/config.ini       # API配置
+├── scripts/                   # 📝 核心脚本
+│   ├── core/start.py          # 数据处理和漏洞扫描
+│   ├── management/            # 扩展扫描管理
+│   └── utils/                 # 工具脚本
 │
-├── data/input/url           # 🎯 目标域名文件
+├── tools/scanner/             # 🔧 扫描工具
+│   ├── subfinder, puredns, httpx, afrog, fscan
 │
-├── scripts/                 # 📝 脚本集
-│   ├── core/start.py        # 数据处理核心
-│   ├── management/          # 扩展扫描管理
-│   └── utils/               # 工具脚本
-│
-├── output/                  # 📊 输出结果
-│   ├── domains/            # 域名信息
-│   ├── reports/            # 扫描报告
-│   └── generations/        # 分代扫描结果
-│
-└── temp/                   # 🗂️ 临时文件
+├── data/input/url             # 🎯 目标域名文件
+├── output/                    # 📊 扫描结果
+└── temp/                      # 🗂️ 临时文件
 ```
-
-## 🎯 扫描流程
-
-1. **子域名收集** → subfinder被动收集
-2. **子域名爆破** → puredns主动爆破
-3. **DNS解析** → 验证域名有效性
-4. **HTTP探测** → httpx服务发现
-5. **数据分析** → start.py智能分析
-6. **扩展发现** → 基于结果生成新目标
-
-## 🌟 主要功能
-
-### 🔍 资产发现
-- 支持FOFA、Hunter API集成
-- 智能CDN检测和过滤
-- 多源域名收集和验证
-
-### 📊 数据分析
-- 状态码分类处理
-- IP地址反向解析
-- 域名相似度分析
-- 自动生成分析报告
-
-### 🔄 扩展扫描
-- 基于发现结果自动生成下一代扫描
-- 支持多级扩展和批量处理
-- 智能目标分组和管理
-
-### 🧹 智能清理
-- 扫描前临时文件清理
-- 分析结果选择性清理
-- 支持预览和备份模式
 
 ## 🚀 快速开始
 
-### 1. 环境准备
-```bash
-# 安装所有工具
-./install.sh
+### 1. 安装工具
 
-# 检查安装状态
-./test.sh
+```bash
+chmod +x tools/setup/install.sh
+./tools/setup/install.sh
 ```
 
 ### 2. 配置目标
-```bash
-# 设置目标域名
-echo "example.com" > data/input/url
 
-# 配置API（可选）
-nano config/api/config.ini
+```bash
+echo "target.com" > data/input/url
 ```
 
 ### 3. 开始扫描
+
 ```bash
-# 完整扫描
+# 测试模式（推荐首次使用）
+./scan.sh --test
+
+# 生产模式（完整扫描）
 ./scan.sh
-
-# 快速扫描
-./scan_fast.sh
 ```
 
-### 4. 查看结果
+## 📊 完整执行流程
+
+### 🎯 一层主扫描流程
+
+```
+data/input/url → 子域名收集 → 子域名爆破 → DNS解析验证 → HTTP探测 → 数据处理 → afrog漏洞扫描 → fscan端口扫描
+```
+
+**执行命令:**
 ```bash
-# 扫描结果概览
-ls -la output/
+# 测试模式（精简参数）
+./scan.sh --test
 
-# 查看域名信息
-cat output/domains/example.com/urls.txt
-
-# 查看分析报告
-cat output/reports/scan/example.com*/base_info_*.txt
+# 生产模式（完整参数）
+./scan.sh
 ```
 
-## 🛠️ 高级功能
+**输出结果:** `output/target.com/`
+```
+target.com/
+├── urls.txt                  # HTTP探测成功的URL列表
+├── a_records.txt             # A记录解析结果
+├── representative_urls.txt   # 去重后的代表性URL
+├── finish.txt                # 扫描完成标记
+├── afrog_report_*.json       # afrog漏洞扫描报告
+├── fscan_result_*.txt        # fscan端口扫描报告
+└── tuozhan/all_tuozhan/      # 扩展目标（用于二层扫描）
+    ├── ip.txt                # 发现的IP地址
+    ├── urls.txt              # 扩展URL目标
+    └── root_domains.txt      # 新发现的根域名
+```
 
-### 扩展扫描管理
+### 🔄 二层扩展扫描流程
+
+基于一层扫描发现的扩展目标，进行深度挖掘：
+
+**执行命令:**
 ```bash
-# 发现扩展结果
-python3 scripts/management/tuozhan_manager.py discover
+# 测试模式二层扫描
+./expand.sh target.com run --test
 
-# 准备下代扫描
-python3 scripts/management/tuozhan_manager.py prepare example.com
-
-# 执行扩展扫描
-cd output/generations/example.com/gen_*/
-./scripts/scan_all.sh
+# 生产模式二层扫描
+./expand.sh target.com run
 ```
 
-### 智能清理
+**输出结果:** `output/expansions/target.com/gen_YYYYMMDD_HHMMSS/`
+```
+gen_20250715_123456/
+├── expansion_summary.txt     # 扩展任务摘要
+├── run_all_expansions.sh     # 一键执行脚本
+├── ip_scans/                 # IP端口扫描结果
+├── url_scans/                # URL探测结果
+└── domain_scans/             # 新域名完整扫描
+```
+
+### 🔄 多层套娃扫描
+
+对二层发现的新域名继续进行扫描：
+
 ```bash
-# 扫描前清理临时文件
-./scripts/utils/smart_cleanup.sh --temp
-
-# 重新分析前清理报告
-./scripts/utils/smart_cleanup.sh --results
-
-# 预览清理内容
-./scripts/utils/smart_cleanup.sh --temp --dry-run
-```
-
-## 📋 配置说明
-
-### API配置
-编辑 `config/api/config.ini`:
-```ini
-[DEFAULT]
-TEST_EMAIL = your_fofa_email@example.com
-TEST_KEY = your_fofa_api_key
-```
-
-### 字典配置
-- `config/wordlists/subdomains.txt` - 子域名爆破字典
-- `config/wordlists/resolvers.txt` - DNS服务器列表
-- `config/filters/` - CDN和域名过滤规则
-
-## 🔧 故障排除
-
-### 常见问题
-```bash
-# 工具缺失
-./install.sh
-
-# 权限问题
-chmod +x scan*.sh tools/scanner/*
-
-# Python依赖
-pip3 install -r docs/requirements.txt
-
-# 配置修复
-./fix_config.sh
-```
-
-### 调试模式
-```bash
-# 详细日志
-./scan.sh 2>&1 | tee scan.log
-
-# 功能测试
-./test.sh
-
-# 检查进度
-./check_progress.sh
-```
-
-## 📈 性能对比
-
-| 扫描模式 | 字典大小 | 预计时间 | 适用场景 |
-|---------|----------|----------|----------|
-| 快速扫描 | ~25个子域名 | 2-5分钟 | 快速验证、演示 |
-| 完整扫描 | ~177k个子域名 | 30-60分钟 | 深度挖掘、生产 |
-
-## 🎯 使用方法
-
-### 基础扫描流程
-```bash
-# 1. 准备环境
-./install.sh && ./test.sh
-
-# 2. 设置目标
+# 1. 一层扫描
 echo "target.com" > data/input/url
-
-# 3. 执行扫描
 ./scan.sh
+
+# 2. 二层扩展
+./expand.sh target.com run
+
+# 3. 对新发现的域名进行三层扫描
+echo "discovered-new-domain.com" > data/input/url
+./scan.sh
+
+# 4. 继续扩展...
+./expand.sh discovered-new-domain.com run
+```
+
+## ⚙️ 参数说明
+
+### 测试模式 vs 生产模式
+
+| 模式 | 参数 | 子域名字典 | 线程数 | HTTP线程 | 适用场景 |
+|------|------|------------|--------|----------|----------|
+| 测试 | `--test` | 前100行 | 20 | 50 | 快速验证流程 |
+| 生产 | 默认 | 完整字典 | 200 | 300 | 深度扫描 |
+
+### start.py参数
+
+- **测试模式**: 传递`-test`参数，使用精简的afrog和fscan参数
+- **生产模式**: 使用完整的漏洞扫描参数
+
+## 🎯 使用场景
+
+### 场景1: 单个目标完整挖掘
+
+```bash
+# 1. 设置目标
+echo "vtmarkets.com" > data/input/url
+
+# 2. 一层主扫描
+./scan.sh
+
+# 3. 二层扩展扫描
+./expand.sh vtmarkets.com run
 
 # 4. 查看结果
-ls -la output/reports/scan/
+ls -la output/vtmarkets.com/
+ls -la output/expansions/vtmarkets.com/
 ```
 
-### 清理和重新扫描
+### 场景2: 快速测试验证
+
 ```bash
-# 清理临时文件（保留分析结果）
-./scripts/utils/smart_cleanup.sh --temp
+# 1. 测试模式一层扫描
+echo "example.com" > data/input/url
+./scan.sh --test
 
-# 重新开始扫描
-./scan.sh
+# 2. 测试模式二层扫描
+./expand.sh example.com run --test
 ```
 
-### 清理分析结果
+### 场景3: 批量目标处理
+
 ```bash
-# 清理所有分析结果
-./scripts/utils/smart_cleanup.sh --results
-
-# 重新分析
-python3 scripts/core/start.py
+# 循环处理多个目标
+for target in target1.com target2.com target3.com; do
+    echo "$target" > data/input/url
+    ./scan.sh --test
+    ./expand.sh "$target" run --test
+done
 ```
 
-### 扩展扫描工作流
-```bash
-# 1. 发现扩展目标
-python3 scripts/management/tuozhan_manager.py discover
+## 📁 核心文件说明
 
-# 2. 准备下代扫描
-python3 scripts/management/tuozhan_manager.py prepare target.com
+### 主要脚本
 
-# 3. 执行扩展扫描
-cd output/generations/target.com/gen_*/
-./scripts/scan_all.sh
+- **scan.sh**: 一层主扫描脚本，执行完整的子域名发现和漏洞扫描流程
+- **expand.sh**: 二层扩展扫描脚本，基于一层结果进行深度挖掘
+- **scripts/core/start.py**: 数据处理核心，负责调用afrog和fscan
 
-# 4. 查看扩展结果
-ls -la results/
+### 配置文件
+
+- **config/subdomains.txt**: 子域名爆破字典
+- **config/resolvers.txt**: DNS解析器列表
+- **config/api/config.ini**: FOFA/Hunter API配置
+
+### 输出文件
+
+- **output/target.com/**: 一层扫描结果
+- **output/expansions/**: 二层扩展扫描结果
+
+## 🔧 常见问题
+
+### Q: 如何修改扫描参数？
+
+**A**: 编辑对应脚本中的参数:
+- 子域名收集线程: 修改scan.sh中的`-t`参数
+- 子域名字典大小: 修改scan.sh中的`head -100`数量
+- HTTP探测线程: 修改scan.sh中httpx的`-t`参数
+
+### Q: 如何添加自定义字典？
+
+**A**: 替换`config/subdomains.txt`文件内容
+
+### Q: 如何配置API密钥？
+
+**A**: 编辑`config/api/config.ini`:
+```ini
+[DEFAULT]
+TEST_EMAIL = your_fofa_email
+TEST_KEY = your_fofa_key
 ```
 
-### 测试和验证
-```bash
-# 功能测试
-./test.sh
+### Q: 如何查看扫描日志？
 
-# 快速验证
-./scan_fast.sh
+**A**: 扫描过程中的输出会直接显示在终端，漏洞扫描结果保存在对应的JSON和TXT文件中
 
-# 预览清理
-./scripts/utils/smart_cleanup.sh --temp --dry-run
-```
+## 🛡️ 安全说明
 
-### 日常维护
-```bash
-# 清理旧日志
-./scripts/utils/smart_cleanup.sh --logs
+本工具仅用于授权的渗透测试和安全研究：
 
-# 检查工具状态
-./test.sh
+1. **获得授权**: 只能对拥有或获得授权的目标进行扫描
+2. **遵守法律**: 确保扫描活动符合当地法律法规  
+3. **负责使用**: 合理控制扫描频率，避免影响目标系统
+4. **数据保护**: 妥善保护扫描结果，避免泄露敏感信息
 
-# 更新字典
-cp new_subdomains.txt config/wordlists/subdomains.txt
-```
+## 📝 更新日志
+
+### v2.1 (2025-07-15) - 流程简化 + 路径优化
+- ✅ **简化核心流程**: 回到基础的一层→二层扫描流程
+- ✅ **精简脚本**: 移除复杂的管理功能，专注核心扫描
+- ✅ **优化test参数**: 精确控制字典大小和线程数
+- ✅ **自动临时文件清理**: 扫描完成后自动清理temp目录
+- 🆕 **环境变量优化**: 使用SCAN_PROJECT_ROOT环境变量避免复杂相对路径
+- 🆕 **配置路径统一**: start.py使用环境变量统一配置文件路径
+- 🆕 **移除符号链接**: 不再创建不必要的tools/scripts符号链接
+
+### v2.0 - 架构优化  
+- 🔄 多层扫描架构
+- 🧹 智能管理系统
+- 📊 简化输出结构
+
+### v1.x - 基础功能
+- 🔍 子域名发现和HTTP探测
+- 🛡️ 漏洞扫描集成
 
 ---
 
-**🎉 现在您的渗透测试自动化平台已经完全设置好了！**
-
-开始您的第一次扫描：`echo "target.com" > data/input/url && ./scan.sh`
+🎯 **专注核心，简洁高效** | 🔍 **一层主扫，二层扩展** | 🛡️ **漏洞检测，深度分析**

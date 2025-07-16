@@ -1,1 +1,0 @@
-rm -I log/passive.txt log/brute.txt log/domain_life log/httpx_url log/result_all.json

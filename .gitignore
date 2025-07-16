@@ -1,0 +1,34 @@
+# 临时文件
+temp/
+*.tmp
+*.temp
+
+# 输出结果
+output/
+data/results/
+backup_*/
+
+# 配置文件中的敏感信息
+config/api/config.ini
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 日志文件
+*.log
+logs/
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 工具缓存
+tools/scanner/.cache/

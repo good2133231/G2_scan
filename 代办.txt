@@ -1,0 +1,13 @@
+
+1、
+🚀 开始执行二层扩展任务...
+[*] 开始扩展扫描任务: vtmarkets.com
+[*] 工作目录: /home/ubuntu/tools/scan/start_game_test/output/vtmarkets.com/expansion/tasks/expansion_20250715_095725
+[*] 执行IP扫描任务...
+[*] 开始批量IP扫描任务
+[*] 任务数量: 4
+========================================
+[*] 执行任务: task_trustpilot_vtmarkets_com
+tee: /home/ubuntu/tools/scan/start_game_test/output/output/vtmarkets.com/expansion/logs/expansion_20250715_095725/ip_scan_log_trustpilot.vtmarkets.com_20250715_095725.log: 没有那个文件或目录
+扫描开始时间: 2025年 07月 15日 星期二 09:57:25 EDT
+这个修复了吗

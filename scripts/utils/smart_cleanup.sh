@@ -22,6 +22,7 @@ CLEANUP_TEMP=false
 CLEANUP_DUPLICATES=false
 CLEANUP_RESULTS=false
 CLEANUP_LOGS=false
+CLEANUP_EVERYTHING=false
 
 # 颜色定义
 RED='\033[0;31m'
@@ -66,6 +67,21 @@ while [[ $# -gt 0 ]]; do
             CLEANUP_LOGS=true
             shift
             ;;
+        --everything)
+            echo -e "${RED}⚠️  全部删除模式！这将删除所有output、temp、日志等文件${NC}"
+            read -p "确定要删除所有文件吗？(输入 'YES' 确认): " confirm
+            if [[ "$confirm" == "YES" ]]; then
+                CLEANUP_TEMP=true
+                CLEANUP_DUPLICATES=true
+                CLEANUP_RESULTS=true
+                CLEANUP_LOGS=true
+                CLEANUP_EVERYTHING=true
+            else
+                echo "操作已取消"
+                exit 0
+            fi
+            shift
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -81,6 +97,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --duplicates  清理重复文件"
             echo "  --results     清理分析报告"
             echo "  --logs        清理旧日志文件"
+            echo "  --all         清理以上所有类型"
+            echo "  --everything  删除所有output、temp等文件（需确认）"
             echo "  --dry-run     仅显示将要删除的文件"
             echo "  --backup      删除前创建备份"
             exit 0
@@ -93,21 +111,32 @@ while [[ $# -gt 0 ]]; do
 done
 
 # 如果没有指定任何清理选项，默认为交互式选择
-if [[ "$CLEANUP_TEMP" == false && "$CLEANUP_DUPLICATES" == false && "$CLEANUP_RESULTS" == false && "$CLEANUP_LOGS" == false ]]; then
+if [[ "$CLEANUP_TEMP" == false && "$CLEANUP_DUPLICATES" == false && "$CLEANUP_RESULTS" == false && "$CLEANUP_LOGS" == false && "$CLEANUP_EVERYTHING" == false ]]; then
     echo -e "${YELLOW}请选择清理类型:${NC}"
     echo "1) 扫描流程临时文件清理 (为新扫描做准备)"
     echo "2) 分析报告清理 (清理start.py输出结果)"
     echo "3) 重复文件清理 (项目重构后的清理)"
     echo "4) 日志文件清理 (清理旧日志)"
-    echo "5) 退出"
+    echo "5) 全部删除 (删除所有output、temp等文件)"
+    echo "6) 退出"
     
-    read -p "请选择 (1-5): " choice
+    read -p "请选择 (1-6): " choice
     case $choice in
         1) CLEANUP_TEMP=true ;;
         2) CLEANUP_RESULTS=true ;;
         3) CLEANUP_DUPLICATES=true ;;
         4) CLEANUP_LOGS=true ;;
-        5) exit 0 ;;
+        5) 
+            echo -e "${RED}⚠️  全部删除模式！这将删除所有output、temp、日志等文件${NC}"
+            read -p "确定要删除所有文件吗？(输入 'YES' 确认): " confirm
+            if [[ "$confirm" == "YES" ]]; then
+                CLEANUP_EVERYTHING=true
+            else
+                echo "操作已取消"
+                exit 0
+            fi
+            ;;
+        6) exit 0 ;;
         *) echo "无效选择"; exit 1 ;;
     esac
 fi
@@ -253,6 +282,46 @@ if [[ "$CLEANUP_RESULTS" == true ]]; then
     fi
     
     echo -e "  ${GREEN}✅ 所有分析报告清理完成，可以重新分析${NC}"
+fi
+
+# 全部删除模式
+if [[ "$CLEANUP_EVERYTHING" == true ]]; then
+    echo -e "\n${RED}🗑️  全部删除模式 - 删除所有生成的文件...${NC}"
+    echo -e "${RED}这将删除 output/、temp/、所有日志文件等${NC}"
+    
+    # 删除整个output目录
+    if [[ -d "output" ]]; then
+        safe_delete "output" "整个输出目录"
+    fi
+    
+    # 删除整个temp目录
+    if [[ -d "temp" ]]; then
+        safe_delete "temp" "整个临时目录"
+    fi
+    
+    # 删除所有日志文件
+    find . -name "*.log" -type f | while read -r log_file; do
+        safe_delete "$log_file" "日志文件"
+    done
+    
+    # 删除所有Python缓存
+    find . -name "*.pyc" -type f | while read -r file; do
+        safe_delete "$file" "Python缓存文件"
+    done
+    
+    find . -name "__pycache__" -type d | while read -r dir; do
+        safe_delete "$dir" "Python缓存目录"
+    done
+    
+    # 删除其他可能的临时文件
+    [[ -f "result.txt" ]] && safe_delete "result.txt" "根目录结果文件"
+    [[ -f "subfinder" ]] && safe_delete "subfinder" "根目录工具文件"
+    [[ -f "url" ]] && safe_delete "url" "根目录URL文件"
+    [[ -d "tuozhan_url" ]] && safe_delete "tuozhan_url" "根目录扩展URL目录"
+    [[ -d "domains" ]] && safe_delete "domains" "根目录域名目录"
+    [[ -d "reports" ]] && safe_delete "reports" "根目录报告目录"
+    
+    echo -e "  ${GREEN}✅ 全部删除完成，项目已重置为初始状态${NC}"
 fi
 
 # 4. 日志文件清理
