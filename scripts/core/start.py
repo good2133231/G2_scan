@@ -1494,7 +1494,13 @@ async def write_representative_urls(folder, titles, urls):
     for url in urls:
         title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3 = titles.get(url, ("", "", "", "", (), "", ""))
         a_str = ",".join(sorted(url_ips))
-        key = (body_hash, cert, a_str, ico)
+        
+        # 如果关键信息都为空，使用URL本身作为唯一标识，避免误判为重复
+        if not body_hash and not cert and not a_str and not ico:
+            key = ("unique_url", url)  # 每个URL都有唯一key
+        else:
+            key = (body_hash, cert, a_str, ico)
+            
         repeat_map[key].append((url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3))
 
     input_folder = folder / "input"
