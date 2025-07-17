@@ -30,8 +30,7 @@ scan-platform/
 │   ├── core/start.py          # 数据处理和漏洞扫描
 │   ├── management/            # 扩展扫描管理
 │   ├── report/                # HTML报告生成
-│   │   ├── generate_scan_report.py          # 基础HTML报告
-│   │   └── generate_interactive_report.py   # 多层交互式报告
+│   │   └── generate_unified_report.py   # 统一报告生成器
 │   └── utils/                 # 工具脚本
 │
 ├── tools/scanner/             # 🔧 扫描工具
@@ -75,6 +74,9 @@ echo "target.com" > data/input/url
 
 # 无限扫描（直到无扩展目标）
 ./scan.sh -s x
+
+# 强制重新执行一层扫描（即使已有结果）
+./scan.sh -s 2 -f
 ```
 
 ### 4. 生成HTML报告
@@ -182,13 +184,13 @@ graph TB
 
 ### 🎨 报告特色
 
-- **📱 响应式设计**: 支持桌面和移动设备
-- **🌐 URL可点击**: 所有URL可直接点击访问
-- **🔍 多层可视化**: 清晰显示各层扫描结果
-- **🛡️ 漏洞突出**: 漏洞信息按严重程度颜色标识
-- **📈 统计图表**: 扫描结果统计和流程图
-- **🔗 域名关系图**: 可视化展示域名发现路径
-- **📊 交互式导航**: 支持层级间快速切换
+- **📱 统一展示**: 一个报告包含所有层级的扫描结果
+- **🌐 URL可点击**: 所有URL和IP地址可直接点击访问
+- **🔍 智能解析**: 自动从base_info提取标题和大小信息
+- **🛡️ 漏洞分级**: 按严重程度（Critical/High/Medium/Low）分类展示
+- **📈 扩展统计**: 清晰展示每层发现的IP/URL/域名数量
+- **📂 正确的目录结构**: 准确处理expansion/report/domain_scan_results/路径
+- **🎯 端口服务识别**: 展示fscan发现的所有服务和端口
 
 ### 📋 报告内容
 
@@ -212,15 +214,6 @@ graph TB
 
 # 指定输出路径
 ./generate_report.sh -o /path/to/report.html
-
-# 生成交互式多层报告（推荐）
-python3 scripts/report/generate_interactive_report.py target.com
-
-# 生成一层扫描报告
-./generate_layer1_report.sh target.com
-
-# 生成基础HTML报告
-python3 scripts/report/generate_scan_report.py target.com
 ```
 
 ## ⚙️ 参数配置
@@ -231,14 +224,18 @@ python3 scripts/report/generate_scan_report.py target.com
 # 只执行第1层扫描
 ./scan.sh -s 1
 
-# 执行1-2层扫描
+# 执行2层扫描（如已有1层结果则跳过1层）
 ./scan.sh -s 2
 
-# 执行1-3层扫描  
+# 执行3层扫描（如已有1层结果则跳过1层）
 ./scan.sh -s 3
 
 # 无限扫描（直到无扩展目标）
 ./scan.sh -s x
+
+# 强制重新执行所有层（忽略已有结果）
+./scan.sh -s 2 -f
+./scan.sh -s 3 -f
 
 # 测试模式多层扫描
 ./scan.sh -s 3 --test
@@ -246,6 +243,11 @@ python3 scripts/report/generate_scan_report.py target.com
 # 测试模式无限扫描
 ./scan.sh -s x --test
 ```
+
+**智能扫描逻辑**：
+- 如果指定 `-s 2` 或更高层数，scan.sh 会检查是否已有一层扫描结果
+- 如果已有结果，直接从扩展目标开始执行后续层扫描
+- 使用 `-f` 参数可强制重新执行一层扫描
 
 ### 🧪 测试模式 vs 生产模式
 

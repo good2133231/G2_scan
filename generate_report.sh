@@ -1,5 +1,5 @@
 #!/bin/bash
-# 生成扫描结果HTML报告的便捷脚本
+# 统一扫描报告生成脚本 - 支持多层扫描结果展示
 
 set -e
 
@@ -14,7 +14,7 @@ OPEN_BROWSER=false
 
 # 显示帮助信息
 show_help() {
-    echo "🎯 生成多层扫描HTML报告"
+    echo "🎯 生成统一扫描HTML报告"
     echo ""
     echo "用法:"
     echo "  ./generate_report.sh [域名] [选项]"
@@ -29,6 +29,10 @@ show_help() {
     echo "  ./generate_report.sh vtmarkets.com       # 指定域名"
     echo "  ./generate_report.sh vtmarkets.com --open # 生成后打开浏览器"
     echo "  ./generate_report.sh -o /tmp/report.html  # 指定输出文件"
+    echo ""
+    echo "说明:"
+    echo "  统一报告包含一层和多层扫描的所有结果"
+    echo "  自动解析标题信息、安全扫描结果等"
 }
 
 # 解析命令行参数
@@ -62,8 +66,8 @@ done
 
 echo "🚀 开始生成扫描报告..."
 
-# 构建Python命令
-PYTHON_CMD="python3 scripts/report/generate_scan_report.py"
+# 构建Python命令 - 使用统一报告生成器
+PYTHON_CMD="python3 scripts/report/generate_unified_report.py"
 
 if [ -n "$TARGET_DOMAIN" ]; then
     PYTHON_CMD="$PYTHON_CMD $TARGET_DOMAIN"
@@ -73,58 +77,9 @@ if [ -n "$OUTPUT_FILE" ]; then
     PYTHON_CMD="$PYTHON_CMD -o $OUTPUT_FILE"
 fi
 
+if [ "$OPEN_BROWSER" = true ]; then
+    PYTHON_CMD="$PYTHON_CMD --open"
+fi
+
 # 执行Python脚本
 $PYTHON_CMD
-
-# 获取生成的报告文件路径
-if [ -n "$OUTPUT_FILE" ]; then
-    REPORT_FILE="$OUTPUT_FILE"
-else
-    # 自动检测域名
-    if [ -z "$TARGET_DOMAIN" ]; then
-        if [ -d "output" ]; then
-            TARGET_DOMAIN=$(find output -maxdepth 1 -type d -name "*.*" | head -1 | xargs basename)
-        fi
-    fi
-    
-    if [ -n "$TARGET_DOMAIN" ]; then
-        REPORT_FILE="output/$TARGET_DOMAIN/scan_report_$TARGET_DOMAIN.html"
-    else
-        echo "❌ 无法确定报告文件路径"
-        exit 1
-    fi
-fi
-
-# 检查报告文件是否存在
-if [ ! -f "$REPORT_FILE" ]; then
-    echo "❌ 报告文件不存在: $REPORT_FILE"
-    exit 1
-fi
-
-echo ""
-echo "✅ 报告生成完成！"
-echo "📁 报告文件: $REPORT_FILE"
-echo "🌐 浏览器访问: file://$(realpath "$REPORT_FILE")"
-
-# 如果指定了打开浏览器
-if [ "$OPEN_BROWSER" = true ]; then
-    echo "🔄 正在打开浏览器..."
-    
-    # 尝试不同的浏览器命令
-    if command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$REPORT_FILE" 2>/dev/null &
-    elif command -v open >/dev/null 2>&1; then
-        open "$REPORT_FILE" 2>/dev/null &
-    elif command -v firefox >/dev/null 2>&1; then
-        firefox "$REPORT_FILE" 2>/dev/null &
-    elif command -v chrome >/dev/null 2>&1; then
-        chrome "$REPORT_FILE" 2>/dev/null &
-    elif command -v chromium >/dev/null 2>&1; then
-        chromium "$REPORT_FILE" 2>/dev/null &
-    else
-        echo "⚠️  无法自动打开浏览器，请手动访问报告文件"
-    fi
-fi
-
-echo ""
-echo "🎉 完成！"

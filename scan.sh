@@ -8,6 +8,7 @@ set -e
 USE_TEST_MODE=false
 SCAN_LEVEL=1  # 默认一层扫描
 UNLIMITED_SCAN=false  # 无限扫描模式
+FORCE_RESCAN=false  # 强制重新扫描
 
 # 处理命令行参数
 while [[ $# -gt 0 ]]; do
@@ -24,6 +25,19 @@ while [[ $# -gt 0 ]]; do
                 SCAN_LEVEL="$2"
             fi
             shift 2
+            ;;
+        -f|--force)
+            FORCE_RESCAN=true
+            shift
+            ;;
+        -h|--help)
+            echo "使用方法: $0 [选项]"
+            echo "选项:"
+            echo "  --test        使用测试模式（精简参数）"
+            echo "  -s <层数>     指定扫描层数 (1,2,3...或x表示无限)"
+            echo "  -f, --force   强制重新执行一层扫描"
+            echo "  -h, --help    显示此帮助信息"
+            exit 0
             ;;
         *)
             shift
@@ -51,6 +65,60 @@ execute_multi_layer_scan() {
     
     echo "🔄 开始多层扫描..." | tee -a "$LOG_FILE"
     
+    # 检查已完成的层数，从未完成的层开始
+    while [ $current_layer -le 10 ]; do
+        # 检查当前层是否已完成
+        if [ $current_layer -eq 2 ]; then
+            LAYER_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/report"
+            LAYER_MERGED_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/layer2/merged_targets"
+        else
+            LAYER_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/layer${current_layer}/report"
+            LAYER_MERGED_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/layer${current_layer}/merged_targets"
+        fi
+        
+        # 如果当前层已有结果，跳到下一层
+        if [ -d "$LAYER_DIR" ] && [ -d "$LAYER_MERGED_DIR" ]; then
+            echo "✅ 检测到第${current_layer}层已有扫描结果，跳过" | tee -a "$LOG_FILE"
+            
+            # 统计该层的扩展目标
+            LAYER_IP_COUNT=0
+            LAYER_URL_COUNT=0
+            LAYER_DOMAIN_COUNT=0
+            
+            if [ -f "$LAYER_MERGED_DIR/ip.txt" ]; then
+                LAYER_IP_COUNT=$(grep -v "^#" "$LAYER_MERGED_DIR/ip.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            if [ -f "$LAYER_MERGED_DIR/urls.txt" ]; then
+                LAYER_URL_COUNT=$(grep -v "^#" "$LAYER_MERGED_DIR/urls.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            if [ -f "$LAYER_MERGED_DIR/root_domains.txt" ]; then
+                LAYER_DOMAIN_COUNT=$(grep -v "^#" "$LAYER_MERGED_DIR/root_domains.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            
+            TOTAL_LAYER_TARGETS=$((LAYER_IP_COUNT + LAYER_URL_COUNT + LAYER_DOMAIN_COUNT))
+            
+            echo "   第${current_layer}层扩展目标统计:" | tee -a "$LOG_FILE"
+            echo "   IP目标: $LAYER_IP_COUNT 个" | tee -a "$LOG_FILE"
+            echo "   URL目标: $LAYER_URL_COUNT 个" | tee -a "$LOG_FILE"
+            echo "   域名目标: $LAYER_DOMAIN_COUNT 个" | tee -a "$LOG_FILE"
+            echo "   总计: $TOTAL_LAYER_TARGETS 个扩展目标" | tee -a "$LOG_FILE"
+            
+            # 如果没有扩展目标，增加空层计数
+            if [ $TOTAL_LAYER_TARGETS -eq 0 ]; then
+                empty_layer_count=$((empty_layer_count + 1))
+            else
+                empty_layer_count=0
+            fi
+            
+            current_layer=$((current_layer + 1))
+            continue
+        fi
+        
+        # 如果到达这里，说明当前层未完成，开始执行
+        break
+    done
+    
+    # 继续原有的扫描逻辑
     while true; do
         # 检查是否达到固定层数限制
         if [ "$UNLIMITED_SCAN" = false ] && [ $current_layer -gt "$SCAN_LEVEL" ]; then
@@ -220,6 +288,50 @@ for tool in subfinder puredns httpx; do
     fi
 done
 
+echo "🚀 开始扫描流程..."
+
+# 检查是否已有一层扫描结果
+FIRST_LAYER_EXISTS=false
+if [ -d "$OUTPUT_DIR/$TARGET_DOMAIN" ] && [ -f "$OUTPUT_DIR/$TARGET_DOMAIN/finish.txt" ] && [ -d "$OUTPUT_DIR/$TARGET_DOMAIN/tuozhan/all_tuozhan" ]; then
+    FIRST_LAYER_EXISTS=true
+    echo "✅ 检测到已有一层扫描结果: $OUTPUT_DIR/$TARGET_DOMAIN" | tee -a "$LOG_FILE"
+fi
+
+# 如果指定了多层扫描且已有一层结果，且未强制重新扫描，则直接执行多层扫描
+if [ "$SCAN_LEVEL" -gt 1 ] && [ "$FIRST_LAYER_EXISTS" = true ] && [ "$FORCE_RESCAN" = false ]; then
+    echo "📊 跳过一层扫描，直接执行第${SCAN_LEVEL}层扫描" | tee -a "$LOG_FILE"
+    echo "💡 提示: 使用 -f 参数可强制重新执行一层扫描" | tee -a "$LOG_FILE"
+    
+    # 检查扩展目标
+    TUOZHAN_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/tuozhan/all_tuozhan"
+    IP_COUNT=0
+    URL_COUNT=0
+    DOMAIN_COUNT=0
+    
+    if [ -f "$TUOZHAN_DIR/ip.txt" ]; then
+        IP_COUNT=$(grep -v '^#' "$TUOZHAN_DIR/ip.txt" 2>/dev/null | wc -l || echo "0")
+    fi
+    if [ -f "$TUOZHAN_DIR/urls.txt" ]; then
+        URL_COUNT=$(grep -v '^#' "$TUOZHAN_DIR/urls.txt" 2>/dev/null | wc -l || echo "0")
+    fi
+    if [ -f "$TUOZHAN_DIR/root_domains.txt" ]; then
+        DOMAIN_COUNT=$(grep -v '^#' "$TUOZHAN_DIR/root_domains.txt" 2>/dev/null | wc -l || echo "0")
+    fi
+    
+    echo "📊 一层扫描的扩展目标统计:" | tee -a "$LOG_FILE"
+    echo "   IP目标: $IP_COUNT 个" | tee -a "$LOG_FILE"
+    echo "   URL目标: $URL_COUNT 个" | tee -a "$LOG_FILE"
+    echo "   域名目标: $DOMAIN_COUNT 个" | tee -a "$LOG_FILE"
+    
+    # 直接执行多层扫描
+    execute_multi_layer_scan
+    
+    echo "🎉 扫描流程完成！"
+    echo "📝 完整日志已保存至: $LOG_FILE"
+    exit 0
+fi
+
+# 否则执行一层扫描
 echo "🚀 开始一层扫描流程..."
 
 # 1. 子域名收集
