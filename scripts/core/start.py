@@ -114,7 +114,9 @@ def record_domain_discovery(from_domain, to_domain, method, details):
     # 避免重复记录
     if relationship not in domain_discovery_relationships:
         domain_discovery_relationships.append(relationship)
-        print(f"[记录] {from_domain} -> {to_domain} (通过{method})")
+        # 减少打印频率，每10条记录打印一次进度
+        if len(domain_discovery_relationships) % 10 == 0:
+            print(f"[进度] 已记录 {len(domain_discovery_relationships)} 条域名发现关系")
 
 def save_domain_relationships(output_folder):
     """保存域名发现关系到文件"""
@@ -1673,10 +1675,17 @@ async def write_representative_urls(folder, titles, urls):
 
 
 async def run_security_scans(root, folder, report_folder):
+    print(f"\n{'='*60}")
+    print(f"[安全扫描] 开始对域名 {root} 进行安全扫描")
+    print(f"{'='*60}")
+    
     afrog_report = report_folder / f"afrog_report_{root}.json"
     fscan_report = report_folder / f"fscan_result_{root}.txt"
     afrog_target_file = folder / "input" / "representative_urls.txt"
     fscan_target_file = folder / "input" / "a_records.txt"
+    
+    # AFROG 扫描部分
+    print(f"\n[步骤1/2] AFROG漏洞扫描")
     print(f"[*] 检查afrog目标文件: {afrog_target_file}")
     if not afrog_target_file.exists():
         empty_file = report_folder / "afrog目标为空.txt"
@@ -1691,6 +1700,7 @@ async def run_security_scans(root, folder, report_folder):
         print(f"[+] afrog目标文件有效，包含 {target_count} 个URL目标")
         afrog_cmd = AFROG_CMD_TEMPLATE.format(target_file=str(afrog_target_file), output_file=str(afrog_report))
         print(f"[*] 执行afrog扫描命令: {afrog_cmd}")
+        print(f"[*] 正在进行漏洞扫描，请稍候...")
         result = await run_cmd_async(afrog_cmd)
         if result is None:
             print(f"[!] afrog扫描失败，跳过")
@@ -1698,6 +1708,8 @@ async def run_security_scans(root, folder, report_folder):
         else:
             print(f"[✓] afrog扫描完成，报告保存至: {afrog_report}")
 
+    # FSCAN 扫描部分
+    print(f"\n[步骤2/2] FSCAN端口扫描")
     print(f"[*] 检查fscan目标文件: {fscan_target_file}")
     if not fscan_target_file.exists():
         empty_file = report_folder / "fscan目标为空.txt"
@@ -1712,12 +1724,16 @@ async def run_security_scans(root, folder, report_folder):
         print(f"[+] fscan目标文件有效，包含 {target_count} 个IP目标")
         fscan_cmd = FSCAN_CMD_TEMPLATE.format(target_file=str(fscan_target_file), output_file=str(fscan_report))
         print(f"[*] 执行fscan扫描命令: {fscan_cmd}")
+        print(f"[*] 正在进行端口扫描，请稍候...")
         result = await run_cmd_async(fscan_cmd)
         if result is None:
             print(f"[!] fscan扫描失败，跳过")
             return
         else:
             print(f"[✓] fscan扫描完成，报告保存至: {fscan_report}")
+    
+    print(f"\n[安全扫描完成] 域名: {root}")
+    print(f"{'='*60}\n")
     await finalize_report_directory(report_folder, root)
 
 
