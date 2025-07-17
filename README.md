@@ -161,9 +161,9 @@ graph TB
 4. **第N层**: 递归扫描，直到无新发现
 
 **扩展示例:**
-- 第1层: vtmarkets.com
-- 第2层: vtaffiliates.com, vtmarkets.net, vtmarketsweb.com（独立域名）
-- 第3层: tradingpro.com, forexhub.net, marketanalytics.org（独立域名）
+- 第1层: target.com
+- 第2层: target-2.com,target-3.com（独立域名）
+- 第3层: target-4.com,target-5.com（独立域名）
 
 ### 🔄 手动扩展扫描
 
