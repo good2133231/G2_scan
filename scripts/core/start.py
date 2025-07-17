@@ -65,7 +65,9 @@ SKIP_CURRENT_DOMAIN = False
 CDN_LIST_PATH = os.path.join(PROJECT_ROOT, "config/filters/cdn.txt")
 CDN_DYNAMIC_PATH = os.path.join(PROJECT_ROOT, "config/filters/cdn_动态添加_一年清一次.txt")
 DYNAMIC_FILTER_FILE = Path(os.path.join(PROJECT_ROOT, "config/filters/filter_domains-动态.txt"))
+DYNAMIC_IP_FILTER_FILE = Path(os.path.join(PROJECT_ROOT, "config/filters/filter-ip-动态.txt"))
 new_filtered_domains = set()
+new_filtered_ips = set()
 
 black_titles = {
         "Just a moment...",
@@ -313,6 +315,12 @@ def load_filter_domains(path):
         return {line.strip().lower() for line in open(path, encoding="utf-8") if line.strip()}
     return set()
 
+# 载入过滤IP
+def load_filter_ips(path):
+    if os.path.exists(path):
+        return {line.strip() for line in open(path, encoding="utf-8") if line.strip() and not line.startswith("#")}
+    return set()
+
 # 载入CDN IP段
 def load_cdn_ranges(path):
     ranges = []
@@ -555,10 +563,10 @@ async def ensure_base_info(root, report_path, valid_ips, urls, titles, filter_do
         print(ip_domain_map)
         await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map, redirect_domains)
         return ip_domain_map
-async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None):
+async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None, filtered_ips=None):
     print(f"\n[>] 执行域名流程: {root}", flush=True)
     folder = prepare_domain_folder(root)
-    valid_ips = write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips)
+    valid_ips = write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips, filtered_ips)
     write_urls(folder, urls)
     # 不在这里写finish.txt，改为在域名处理完成后写入
 
@@ -659,7 +667,7 @@ def natural_sort_key(s):
     # 分割字符串，数字转int，字母小写
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
-def write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips):
+def write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips, filtered_ips=None):
     valid_ips = []
     input_folder = folder / "input"
     input_folder.mkdir(exist_ok=True)
@@ -680,9 +688,14 @@ def write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips):
             if ip in existing_all_ips:
                 print(f"[!] 已存在于 all_a_records.txt 中，跳过: {ip}")
                 continue
+            if filtered_ips and ip in filtered_ips:
+                print(f"[!] 已存在于 filter-ip-动态.txt 中，跳过: {ip}")
+                continue
             a.write(ip + "\n")
             all_a.write(ip + "\n")
             valid_ips.append(ip)
+            # 添加到new_filtered_ips以便后续写入
+            new_filtered_ips.add(ip)
 
     return valid_ips
 
@@ -1230,6 +1243,11 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
                 await f.write(f"{root}\n")
         else:
             await f.write("# 暂无根域名目标\n")
+    
+    # 将root_domains加入到new_filtered_domains以便写入filter-domain-动态.txt
+    if merged_roots_with_source:
+        for root, source in merged_roots_with_source:
+            new_filtered_domains.add(root)
 
 async def load_fofa_query_blacklist() -> set[str]:
     try:
@@ -1811,6 +1829,15 @@ def save_non_200_urls_by_domain(non_200_urls_all, url_root_map):
 def main():
     init_dirs()
     filter_domains = load_filter_domains(FILTER_DOMAIN_PATH)
+    
+    # 加载动态过滤域名并合并
+    if DYNAMIC_FILTER_FILE.exists():
+        dynamic_domains = load_filter_domains(str(DYNAMIC_FILTER_FILE))
+        filter_domains = filter_domains.union(dynamic_domains)
+    
+    # 加载过滤IP
+    filtered_ips = load_filter_ips(str(DYNAMIC_IP_FILTER_FILE))
+    
     cdn_ranges = load_cdn_ranges(CDN_LIST_PATH)
     existing_cdn_dyn_ips = {line.strip() for line in open(CDN_DYNAMIC_PATH, encoding="utf-8")} if os.path.exists(CDN_DYNAMIC_PATH) else set()
 
@@ -1897,7 +1924,7 @@ def main():
     
     # 异步任务放到 asyncio.run 中执行
     try:
-        asyncio.run(run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains_all))
+        asyncio.run(run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains_all, filtered_ips))
     except Exception as e:
         print(f"[ERROR] 异步任务执行出错: {e}")
         import traceback
@@ -1922,10 +1949,31 @@ def main():
                 for dom in sorted(new_domains_to_write):
                     f.write(dom + "\n")
     
+    # 收集所有新增的过滤IP并去重写入
+    if new_filtered_ips:
+        # 读取现有的过滤IP
+        existing_ips = set()
+        if DYNAMIC_IP_FILTER_FILE.exists():
+            with open(DYNAMIC_IP_FILTER_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        existing_ips.add(line)
+        
+        # 只写入新增的IP
+        new_ips_to_write = new_filtered_ips - existing_ips
+        if new_ips_to_write:
+            print(f"[+] 写入 {len(new_ips_to_write)} 个新增动态过滤IP")
+            # 确保目录存在
+            DYNAMIC_IP_FILTER_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(DYNAMIC_IP_FILTER_FILE, "a", encoding="utf-8") as f:
+                for ip in sorted(new_ips_to_write):
+                    f.write(ip + "\n")
+    
     print("[✓] 程序执行完成", flush=True)
 
 
-async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None):
+async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None, filtered_ips=None):
     global SKIP_CURRENT_DOMAIN
     print("[*] 开始逐个执行域名流程...", flush=True)
     sorted_domains = sorted(domain_urls_map.keys(), key=natural_sort_key)
@@ -1943,7 +1991,7 @@ async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cd
             urls = sorted(domain_urls_map.get(domain, []))
             print(f"[DEBUG] {domain} 有 {len(ips)} 个IP, {len(urls)} 个URL")
             titles = {u: domain_titles_map.get(u, ("", "", "", "", (), "", "", 0)) for u in urls}
-            await per_domain_flow_sync_async(domain, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains)
+            await per_domain_flow_sync_async(domain, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains, filtered_ips)
         except asyncio.CancelledError:
             print(f"[!] 当前任务被取消: {domain}")
             continue

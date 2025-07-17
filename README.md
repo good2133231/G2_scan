@@ -216,6 +216,9 @@ graph TB
 # 生成交互式多层报告（推荐）
 python3 scripts/report/generate_interactive_report.py target.com
 
+# 生成一层扫描报告
+./generate_layer1_report.sh target.com
+
 # 生成基础HTML报告
 python3 scripts/report/generate_scan_report.py target.com
 ```
@@ -332,6 +335,23 @@ fi
 ```
 
 ## 🔧 高级功能
+
+### 🛡️ 动态过滤机制
+
+系统自动维护动态过滤列表，避免重复扫描：
+
+**域名过滤**：
+- 静态过滤：`config/filters/filter-domain.txt`
+- 动态过滤：`config/filters/filter_domains-动态.txt`
+- 自动添加：发现的根域名自动加入动态过滤列表
+
+**IP过滤**：
+- 动态过滤：`config/filters/filter-ip-动态.txt`
+- 自动添加：扫描过的IP自动加入，避免重复fscan扫描
+
+**CDN过滤**：
+- 静态CDN：`config/filters/cdn.txt`
+- 动态CDN：`config/filters/cdn_动态添加_一年清一次.txt`
 
 ### 📈 扫描结果分析
 
