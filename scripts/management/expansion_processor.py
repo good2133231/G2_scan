@@ -15,21 +15,34 @@ import argparse
 import shutil
 
 class ExpansionProcessor:
-    def __init__(self, target_domain, project_root=".", use_test_config=False):
+    def __init__(self, target_domain, project_root=".", use_test_config=False, scan_layer=2, input_dir=None):
         self.target_domain = target_domain
         self.project_root = Path(project_root)
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.use_test_config = use_test_config
+        self.scan_layer = scan_layer
         
-        # 扫描结果路径（简化结构）
+        # 扫描结果路径（根据层数和输入目录）
         self.scan_output = self.project_root / "output" / target_domain
-        self.tuozhan_dir = self.scan_output / "tuozhan" / "all_tuozhan"
+        if input_dir:
+            self.tuozhan_dir = Path(input_dir)
+        else:
+            # 默认使用一层扫描结果
+            self.tuozhan_dir = self.scan_output / "tuozhan" / "all_tuozhan"
         
-        # 扩展任务输出目录 - 优化结构
+        # 扩展任务输出目录 - 根据层数决定
         self.expansion_base = self.project_root / "output" / target_domain / "expansion"
-        self.expansion_logs = self.expansion_base / "logs" / f"expansion_{self.timestamp}"
-        self.expansion_tasks = self.expansion_base / "tasks" / f"expansion_{self.timestamp}"
-        self.expansion_report = self.expansion_base / "report" / f"expansion_{self.timestamp}"
+        if scan_layer == 2:
+            # 二层保持原有结构以兼容
+            self.expansion_logs = self.expansion_base / "logs"
+            self.expansion_tasks = self.expansion_base / "tasks"
+            self.expansion_report = self.expansion_base / "report"
+        else:
+            # 三层及以上使用新结构
+            layer_base = self.expansion_base / f"layer{scan_layer}"
+            self.expansion_logs = layer_base / "logs"
+            self.expansion_tasks = layer_base / "tasks"
+            self.expansion_report = layer_base / "report"
         
         self.expansion_logs.mkdir(parents=True, exist_ok=True)
         self.expansion_tasks.mkdir(parents=True, exist_ok=True)
@@ -41,6 +54,7 @@ class ExpansionProcessor:
         self.processed_urls = set()
         
         print(f"[*] 初始化扩展处理器: {target_domain}")
+        print(f"[*] 扫描层数: 第{scan_layer}层")
         print(f"[*] 输入目录: {self.tuozhan_dir}")
         print(f"[*] 任务目录: {self.expansion_tasks}")
         print(f"[*] 日志目录: {self.expansion_logs}")
@@ -178,12 +192,12 @@ class ExpansionProcessor:
 set -e
 
 # 设置项目根目录环境变量
-export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../../../.." && pwd)"
+export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../../.." && pwd)"
 
 # 创建日志目录并设置日志文件
 mkdir -p "$SCAN_PROJECT_ROOT/temp/log"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/expansion_{self.timestamp}"
-LOG_FILE="$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/expansion_{self.timestamp}/ip_scan_log_{source_name}_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs"
+LOG_FILE="$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/ip_scan_log_{source_name}_$(date +%Y%m%d_%H%M%S).log"
 
 echo "扫描开始时间: $(date)" | tee -a "$LOG_FILE"
 echo "任务类型: IP端口扫描" | tee -a "$LOG_FILE"
@@ -229,8 +243,8 @@ if [ "$filtered_count" -eq 0 ]; then
     echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
     
     # 仍然保存日志
-    mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))"
-    cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))/"
+    mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))"
+    cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/"
     exit 0
 fi
 
@@ -259,19 +273,19 @@ fi
 
 # 创建统一输出目录
 echo "[*] 整理扫描结果..." | tee -a "$LOG_FILE"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))"
-cp fscan_result.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
-cp targets_filtered.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))/targets_used.txt" 2>/dev/null || true
+mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))"
+cp fscan_result.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
+cp targets_filtered.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/targets_used.txt" 2>/dev/null || true
 
 # 复制fscan发现的URL文件
 if [ -f fscan_url.txt ]; then
-    cp fscan_url.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
+    cp fscan_url.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
     echo "   已保存fscan发现的URL文件" | tee -a "$LOG_FILE"
 fi
 
-cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))/"
+cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/"
 
-echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/ip_scan_results/$(basename $(pwd))/" | tee -a "$LOG_FILE"
+echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" | tee -a "$LOG_FILE"
 echo "[*] 日志文件: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
 """)
@@ -355,12 +369,12 @@ echo "[*] 完成时间: $(date)"
 set -e
 
 # 设置项目根目录环境变量
-export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../../.." && pwd)"
+export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../.." && pwd)"
 
 # 创建日志目录并设置日志文件
 mkdir -p "$SCAN_PROJECT_ROOT/temp/log"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/expansion_{self.timestamp}"
-LOG_FILE="$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/expansion_{self.timestamp}/url_scan_log_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs"
+LOG_FILE="$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/url_scan_log_$(date +%Y%m%d_%H%M%S).log"
 
 echo "扫描开始时间: $(date)" | tee -a "$LOG_FILE"
 echo "任务类型: URL扫描" | tee -a "$LOG_FILE"
@@ -396,12 +410,12 @@ fi
 
 # 创建统一输出目录
 echo "[*] 整理扫描结果..." | tee -a "$LOG_FILE"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/url_scan_results/"
-cp httpx_result.json "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/url_scan_results/" 2>/dev/null || true
-cp targets.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/url_scan_results/targets_used.txt"
-cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/url_scan_results/"
+mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/"
+cp httpx_result.json "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/" 2>/dev/null || true
+cp targets.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/targets_used.txt"
+cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/"
 
-echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/url_scan_results/" | tee -a "$LOG_FILE"
+echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/url_scan_results/" | tee -a "$LOG_FILE"
 echo "[*] 日志文件: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
 """)
@@ -467,12 +481,12 @@ echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
 set -e
 
 # 设置项目根目录环境变量
-export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../../../.." && pwd)"
+export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../../.." && pwd)"
 
 # 创建日志目录并设置日志文件
 mkdir -p "$SCAN_PROJECT_ROOT/temp/log"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/expansion_{self.timestamp}"
-LOG_FILE="$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/expansion_{self.timestamp}/scan_log_{domain}_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs"
+LOG_FILE="$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/logs/scan_log_{domain}_$(date +%Y%m%d_%H%M%S).log"
 
 # 执行日志记录函数
 log_command() {{
@@ -523,10 +537,10 @@ log_command "$SCAN_PROJECT_ROOT/tools/scanner/subfinder {subfinder_params}" "子
 "$SCAN_PROJECT_ROOT/tools/scanner/subfinder" {subfinder_params} 2>&1 | tee -a "$LOG_FILE"
 check_file_result "temp/passive.txt" "子域名收集"
 
-# 2. 子域名爆破
-log_command "$SCAN_PROJECT_ROOT/tools/scanner/puredns bruteforce {puredns_bruteforce_params}" "子域名爆破({mode_description})"
-"$SCAN_PROJECT_ROOT/tools/scanner/puredns" bruteforce {puredns_bruteforce_params} 2>&1 | tee -a "$LOG_FILE"
-check_file_result "temp/brute.txt" "子域名爆破" || echo "   继续执行合并步骤" | tee -a "$LOG_FILE"
+# 2. 子域名爆破（二层扫描跳过）
+log_command "echo '⚡ 二层扫描：跳过子域名爆破，创建空文件' && touch temp/brute.txt" "子域名爆破（跳过）"
+echo "⚡ 二层扫描：跳过子域名爆破，创建空文件" | tee -a "$LOG_FILE"
+touch temp/brute.txt
 
 # 3. 合并去重
 log_command "cat temp/passive.txt temp/brute.txt | sort -u > temp/domain_life" "合并去重"
@@ -561,21 +575,21 @@ echo "[*] 扫描完成: {domain}" | tee -a "$LOG_FILE"
 
 # 创建统一输出目录
 echo "[*] 整理扫描结果..." | tee -a "$LOG_FILE"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/domain_scan_results/{domain}/"
+mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
 
 # 复制扫描结果文件
 if [ -f "temp/result_all.json" ]; then
-    cp temp/result_all.json "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/domain_scan_results/{domain}/"
+    cp temp/result_all.json "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
 fi
 
 if [ -d "output" ]; then
-    cp -r output/* "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/domain_scan_results/{domain}/"
+    cp -r output/* "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
 fi
 
 # 复制日志文件
-cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/domain_scan_results/{domain}/"
+cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
 
-echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/expansion_{self.timestamp}/domain_scan_results/{domain}/" | tee -a "$LOG_FILE"
+echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/" | tee -a "$LOG_FILE"
 echo "[*] 日志文件: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "[*] 完成时间: $(date)" | tee -a "$LOG_FILE"
 """)
@@ -716,7 +730,7 @@ echo "[*] 完成时间: $(date)"
 
     def process(self):
         """主处理流程"""
-        print(f"\\n[*] 开始处理扩展任务...")
+        print(f"\n[*] 开始处理扩展任务...")
         
         # 检查输入文件
         if not self.tuozhan_dir.exists():
@@ -744,7 +758,94 @@ echo "[*] 完成时间: $(date)"
         # 生成摘要
         self.generate_summary(ip_targets, url_targets, root_domain_targets)
         
-        print(f"\\n[✓] 扩展任务生成完成!")
+        print(f"\n[✓] 扩展任务生成完成!")
+        
+        # 如果不是二层，合并当前层的所有扫描结果
+        if self.scan_layer != 2:
+            self.merge_layer_results()
+        
+        return True
+    
+    def merge_layer_results(self):
+        """合并当前层的所有扫描结果，为下一层准备"""
+        print(f"\n[*] 合并第{self.scan_layer}层扫描结果...")
+        
+        # 创建合并目标目录
+        if self.scan_layer == 2:
+            merged_dir = self.expansion_base / "layer2" / "merged_targets"
+        else:
+            merged_dir = self.expansion_base / f"layer{self.scan_layer}" / "merged_targets"
+        
+        merged_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 收集所有扫描结果
+        all_ips = set()
+        all_urls = set()
+        all_domains = set()
+        
+        # 遍历当前层的所有扫描结果
+        for result_dir in self.expansion_report.iterdir():
+            if result_dir.is_dir():
+                # 查找tuozhan/all_tuozhan目录
+                tuozhan_path = result_dir / "tuozhan" / "all_tuozhan"
+                if tuozhan_path.exists():
+                    # 读取IP
+                    ip_file = tuozhan_path / "ip.txt"
+                    if ip_file.exists():
+                        with open(ip_file, 'r') as f:
+                            for line in f:
+                                line = line.strip()
+                                if line and not line.startswith('#'):
+                                    all_ips.add(line)
+                    
+                    # 读取URL
+                    url_file = tuozhan_path / "urls.txt"
+                    if url_file.exists():
+                        with open(url_file, 'r') as f:
+                            for line in f:
+                                line = line.strip()
+                                if line and not line.startswith('#'):
+                                    all_urls.add(line)
+                    
+                    # 读取域名
+                    domain_file = tuozhan_path / "root_domains.txt"
+                    if domain_file.exists():
+                        with open(domain_file, 'r') as f:
+                            for line in f:
+                                line = line.strip()
+                                if line and not line.startswith('#'):
+                                    all_domains.add(line)
+        
+        # 写入合并结果
+        with open(merged_dir / "ip.txt", 'w') as f:
+            if all_ips:
+                f.write(f"# 第{self.scan_layer}层扫描合并IP目标\n")
+                for ip in sorted(all_ips):
+                    f.write(f"{ip}\n")
+            else:
+                f.write("# 暂无IP目标\n")
+        
+        with open(merged_dir / "urls.txt", 'w') as f:
+            if all_urls:
+                f.write(f"# 第{self.scan_layer}层扫描合并URL目标\n")
+                for url in sorted(all_urls):
+                    f.write(f"{url}\n")
+            else:
+                f.write("# 暂无URL目标\n")
+        
+        with open(merged_dir / "root_domains.txt", 'w') as f:
+            if all_domains:
+                f.write(f"# 第{self.scan_layer}层扫描合并域名目标\n")
+                for domain in sorted(all_domains):
+                    f.write(f"{domain}\n")
+            else:
+                f.write("# 暂无域名目标\n")
+        
+        print(f"[✓] 合并完成:")
+        print(f"   - IP目标: {len(all_ips)} 个")
+        print(f"   - URL目标: {len(all_urls)} 个")
+        print(f"   - 域名目标: {len(all_domains)} 个")
+        print(f"   - 结果目录: {merged_dir}")
         print(f"[✓] 任务目录: {self.expansion_tasks}")
         print(f"[✓] 执行命令: cd {self.expansion_tasks} && ./run_all_expansions.sh")
         
@@ -780,12 +881,14 @@ def main():
     parser.add_argument("--project-root", default=".", help="项目根目录")
     parser.add_argument("--batch", action="store_true", help="批量模式，处理所有目标")
     parser.add_argument("--test", action="store_true", help="使用测试配置")
+    parser.add_argument("--layer", type=int, default=2, help="扫描层数（默认为2）")
+    parser.add_argument("--input-dir", help="输入目录（默认根据层数自动确定）")
     
     args = parser.parse_args()
     
     if args.target_domain:
         # 处理单个目标
-        processor = ExpansionProcessor(args.target_domain, args.project_root, args.test)
+        processor = ExpansionProcessor(args.target_domain, args.project_root, args.test, args.layer, args.input_dir)
         success = processor.process()
         sys.exit(0 if success else 1)
     else:

@@ -6,12 +6,137 @@ set -e
 
 # 解析参数
 USE_TEST_MODE=false
-if [[ "$1" == "--test" ||  "$1" == "-test" ]]; then
-    USE_TEST_MODE=true
+SCAN_LEVEL=1  # 默认一层扫描
+UNLIMITED_SCAN=false  # 无限扫描模式
+
+# 处理命令行参数
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --test|-test)
+            USE_TEST_MODE=true
+            shift
+            ;;
+        -s|--scan-level)
+            if [ "$2" = "x" ] || [ "$2" = "unlimited" ]; then
+                UNLIMITED_SCAN=true
+                SCAN_LEVEL=999  # 设置一个很大的数字
+            else
+                SCAN_LEVEL="$2"
+            fi
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# 显示扫描模式
+if [ "$USE_TEST_MODE" = true ]; then
     echo "🧪 测试模式：使用精简参数"
 else
     echo "🔥 生产模式：使用完整参数"
 fi
+if [ "$UNLIMITED_SCAN" = true ]; then
+    echo "📊 扫描层数：无限扫描模式（直到无扩展目标）"
+else
+    echo "📊 扫描层数：$SCAN_LEVEL 层"
+fi
+
+# 多层扫描执行函数
+execute_multi_layer_scan() {
+    local current_layer=2
+    local max_empty_layers=2  # 连续空层数限制
+    local empty_layer_count=0
+    
+    echo "🔄 开始多层扫描..." | tee -a "$LOG_FILE"
+    
+    while true; do
+        # 检查是否达到固定层数限制
+        if [ "$UNLIMITED_SCAN" = false ] && [ $current_layer -gt "$SCAN_LEVEL" ]; then
+            echo "✅ 已达到指定扫描层数 $SCAN_LEVEL，扫描完成" | tee -a "$LOG_FILE"
+            break
+        fi
+        
+        # 检查是否达到连续空层限制
+        if [ $empty_layer_count -ge $max_empty_layers ]; then
+            echo "✅ 连续 $max_empty_layers 层无扩展目标，自动停止扫描" | tee -a "$LOG_FILE"
+            break
+        fi
+        
+        echo "🔄 自动执行第${current_layer}层扫描..." | tee -a "$LOG_FILE"
+        
+        # 执行当前层扫描
+        if [ "$USE_TEST_MODE" = true ]; then
+            ./expand.sh "$TARGET_DOMAIN" run --test --layer "$current_layer"
+        else
+            ./expand.sh "$TARGET_DOMAIN" run --layer "$current_layer"
+        fi
+        
+        # 检查扫描结果
+        if [ $? -ne 0 ]; then
+            echo "❌ 第${current_layer}层扫描失败，停止扫描" | tee -a "$LOG_FILE"
+            break
+        fi
+        
+        # 等待扫描完成并收集扩展目标
+        sleep 2
+        
+        # 确定目标目录
+        if [ $current_layer -eq 2 ]; then
+            LAYER_TARGETS_DIR="output/$TARGET_DOMAIN/expansion/layer2/merged_targets"
+        else
+            LAYER_TARGETS_DIR="output/$TARGET_DOMAIN/expansion/layer${current_layer}/merged_targets"
+        fi
+        
+        # 统计扩展目标
+        LAYER_IP_COUNT=0
+        LAYER_URL_COUNT=0
+        LAYER_DOMAIN_COUNT=0
+        
+        if [ -d "$LAYER_TARGETS_DIR" ]; then
+            if [ -f "$LAYER_TARGETS_DIR/ip.txt" ]; then
+                LAYER_IP_COUNT=$(grep -v "^#" "$LAYER_TARGETS_DIR/ip.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            if [ -f "$LAYER_TARGETS_DIR/urls.txt" ]; then
+                LAYER_URL_COUNT=$(grep -v "^#" "$LAYER_TARGETS_DIR/urls.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            if [ -f "$LAYER_TARGETS_DIR/root_domains.txt" ]; then
+                LAYER_DOMAIN_COUNT=$(grep -v "^#" "$LAYER_TARGETS_DIR/root_domains.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+        fi
+        
+        TOTAL_LAYER_TARGETS=$((LAYER_IP_COUNT + LAYER_URL_COUNT + LAYER_DOMAIN_COUNT))
+        
+        if [ $TOTAL_LAYER_TARGETS -gt 0 ]; then
+            echo "🎯 第${current_layer}层扫描发现目标:" | tee -a "$LOG_FILE"
+            echo "   IP目标: $LAYER_IP_COUNT 个" | tee -a "$LOG_FILE"
+            echo "   URL目标: $LAYER_URL_COUNT 个" | tee -a "$LOG_FILE"
+            echo "   域名目标: $LAYER_DOMAIN_COUNT 个" | tee -a "$LOG_FILE"
+            echo "   总计: $TOTAL_LAYER_TARGETS 个扩展目标" | tee -a "$LOG_FILE"
+            empty_layer_count=0  # 重置空层计数
+        else
+            echo "ℹ️  第${current_layer}层扫描未发现新的扩展目标" | tee -a "$LOG_FILE"
+            empty_layer_count=$((empty_layer_count + 1))
+            
+            # 如果是无限扫描模式，在连续空层时停止
+            if [ "$UNLIMITED_SCAN" = true ]; then
+                echo "   连续空层数: $empty_layer_count/$max_empty_layers" | tee -a "$LOG_FILE"
+            fi
+        fi
+        
+        # 准备下一层
+        current_layer=$((current_layer + 1))
+        
+        # 安全限制：防止无限循环
+        if [ $current_layer -gt 20 ]; then
+            echo "⚠️  达到最大扫描层数限制 (20层)，停止扫描" | tee -a "$LOG_FILE"
+            break
+        fi
+    done
+    
+    echo "🎉 多层扫描完成！总共执行了 $((current_layer - 2)) 个扩展层" | tee -a "$LOG_FILE"
+}
 
 # 执行日志函数
 LOG_FILE=""
@@ -100,9 +225,9 @@ echo "🚀 开始一层扫描流程..."
 # 1. 子域名收集
 echo "📡 步骤1: 子域名收集..."
 if [ "$USE_TEST_MODE" = true ]; then
-    CMD="$TOOLS_DIR/subfinder -dL $TARGET_FILE -all -t 20 -o $TEMP_DIR/passive.txt"
+    CMD="$TOOLS_DIR/subfinder -dL $TARGET_FILE -t 20 -o $TEMP_DIR/passive.txt"
     log_command "$CMD" "子域名被动收集(测试模式)"
-    $TOOLS_DIR/subfinder -dL "$TARGET_FILE" -all -t 20 -o "$TEMP_DIR/passive.txt" 2>&1 | tee -a "$LOG_FILE"
+    $TOOLS_DIR/subfinder -dL "$TARGET_FILE"  -t 20 -o "$TEMP_DIR/passive.txt" 2>&1 | tee -a "$LOG_FILE"
 else
     CMD="$TOOLS_DIR/subfinder -dL $TARGET_FILE -all -t 200 -o $TEMP_DIR/passive.txt"
     log_command "$CMD" "子域名被动收集(生产模式)"
@@ -120,14 +245,9 @@ fi
 # 2. 子域名爆破
 echo "💥 步骤2: 子域名爆破..."
 if [ "$USE_TEST_MODE" = true ]; then
-    # 测试模式：只使用前100行字典
-    head -100 "$CONFIG_DIR/subdomains.txt" > "$TEMP_DIR/test_subdomains.txt"
-    CMD="$TOOLS_DIR/puredns bruteforce $TEMP_DIR/test_subdomains.txt $TARGET_DOMAIN -r $CONFIG_DIR/resolvers.txt -q -w $TEMP_DIR/brute.txt"
-    log_command "$CMD" "子域名爆破(测试模式-100行字典)"
-    $TOOLS_DIR/puredns bruteforce "$TEMP_DIR/test_subdomains.txt" \
-        "$TARGET_DOMAIN" \
-        -r "$CONFIG_DIR/resolvers.txt" \
-        -q -w "$TEMP_DIR/brute.txt" 2>&1 | tee -a "$LOG_FILE"
+    # 测试模式：跳过爆破，创建空文件
+    echo "⚡ 测试模式：跳过子域名爆破，创建空文件" | tee -a "$LOG_FILE"
+    touch "$TEMP_DIR/brute.txt"
 else
     # 生产模式：使用完整字典
     CMD="$TOOLS_DIR/puredns bruteforce $CONFIG_DIR/subdomains.txt $TARGET_DOMAIN -r $CONFIG_DIR/resolvers.txt -q -w $TEMP_DIR/brute.txt"
@@ -286,17 +406,22 @@ if [ -d "$TUOZHAN_DIR" ]; then
         echo "   URL目标: $URL_COUNT 个" 
         echo "   域名目标: $DOMAIN_COUNT 个"
         echo ""
-        echo "💡 执行二层扫描: ./expand.sh $TARGET_DOMAIN run"
-        if [ "$USE_TEST_MODE" = true ]; then
-            echo "💡 测试模式二层: ./expand.sh $TARGET_DOMAIN run --test"
-        fi
         
         # 记录扩展建议到日志
         echo "扩展目标统计:" >> "$LOG_FILE"
         echo "   IP目标: $IP_COUNT 个 (fscan端口扫描)" >> "$LOG_FILE"
         echo "   URL目标: $URL_COUNT 个 (httpx探测)" >> "$LOG_FILE"
         echo "   域名目标: $DOMAIN_COUNT 个 (完整扫描流程)" >> "$LOG_FILE"
-        echo "建议执行命令: ./expand.sh $TARGET_DOMAIN run$([ \"$USE_TEST_MODE\" = true ] && echo ' --test')" >> "$LOG_FILE"
+        
+        # 根据扫描层数决定是否自动执行多层扫描
+        if [ "$SCAN_LEVEL" -ge 2 ] || [ "$UNLIMITED_SCAN" = true ]; then
+            execute_multi_layer_scan
+        else
+            echo "💡 执行二层扫描: ./scan.sh -s 2"
+            if [ "$USE_TEST_MODE" = true ]; then
+                echo "💡 测试模式二层: ./scan.sh -s 2 --test"
+            fi
+        fi
     else
         echo "ℹ️  未发现扩展目标，一层扫描已完成" | tee -a "$LOG_FILE"
     fi

@@ -99,6 +99,78 @@ HUNTER_API_KEY = ""
 dns_cache = {}
 reverse_lookup_semaphore = None  # 将在异步上下文中初始化
 
+# 域名发现关系记录器
+domain_discovery_relationships = []
+
+def record_domain_discovery(from_domain, to_domain, method, details):
+    """记录域名发现关系"""
+    global domain_discovery_relationships
+    relationship = {
+        "from": from_domain,
+        "to": to_domain,
+        "method": method,
+        "details": details
+    }
+    # 避免重复记录
+    if relationship not in domain_discovery_relationships:
+        domain_discovery_relationships.append(relationship)
+        print(f"[记录] {from_domain} -> {to_domain} (通过{method})")
+
+def save_domain_relationships(output_folder):
+    """保存域名发现关系到文件"""
+    relationships_file = output_folder / "domain_discovery_relationships.json"
+    discovery_methods = {
+        "FOFA搜索": {
+            "description": "通过FOFA搜索引擎发现",
+            "icon": "🔍",
+            "color": "#3498db"
+        },
+        "IP反查": {
+            "description": "通过IP地址反查域名",
+            "icon": "🎯",
+            "color": "#e74c3c"
+        },
+        "证书关联": {
+            "description": "通过SSL证书SAN发现",
+            "icon": "🔐",
+            "color": "#f39c12"
+        },
+        "URL跳转": {
+            "description": "通过HTTP跳转发现",
+            "icon": "↗️",
+            "color": "#27ae60"
+        },
+        "子域名枚举": {
+            "description": "通过子域名爆破发现",
+            "icon": "📡",
+            "color": "#9b59b6"
+        },
+        "页面内容": {
+            "description": "从页面内容提取",
+            "icon": "📄",
+            "color": "#1abc9c"
+        },
+        "DNS记录": {
+            "description": "通过DNS查询发现",
+            "icon": "🌐",
+            "color": "#34495e"
+        },
+        "资源引用": {
+            "description": "页面资源引用发现",
+            "icon": "🔗",
+            "color": "#e67e22"
+        }
+    }
+    
+    data = {
+        "relationships": domain_discovery_relationships,
+        "discovery_methods": discovery_methods
+    }
+    
+    with open(relationships_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"[✓] 保存域名发现关系: {relationships_file}")
+
 def handle_sigint(signum, frame):
     global SKIP_CURRENT_DOMAIN
     print("\n[!] 收到 Ctrl+C，跳过当前域名，继续下一个...")
@@ -448,10 +520,7 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
                 "body_fqdn": filtered_fqdn,
                 "body_domains": filtered_domains
             }
-            if new_filtered_domains:
-                with open(DYNAMIC_FILTER_FILE, "a", encoding="utf-8") as f:
-                    for dom in sorted(new_filtered_domains):
-                        f.write(dom + "\n")
+            # 不在这里写入，改为在主函数最后统一写入
 
         except Exception as e:
             if DEBUG_FSCAN:
@@ -485,11 +554,11 @@ async def ensure_base_info(root, report_path, valid_ips, urls, titles, filter_do
         await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map, redirect_domains)
         return ip_domain_map
 async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None):
-    print(f"\n[>] 执行域名流程: {root}")
+    print(f"\n[>] 执行域名流程: {root}", flush=True)
     folder = prepare_domain_folder(root)
     valid_ips = write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips)
     write_urls(folder, urls)
-    mark_classification_complete(folder)
+    # 不在这里写finish.txt，改为在域名处理完成后写入
 
     # 报告目录设置
     base_report_root = Path("output")
@@ -519,14 +588,23 @@ async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter
         print(f"[*] 有效IP列表: {valid_ips}")
         print(f"当前域名: {root}")
 
-        ip_domain_map,cdn_ip_to_remove = await resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn_ips, folder)
-        print("[✓] 完成反查域名")
+        # 在测试模式下跳过IP反查
+        if ONLY_DOMAIN_MODE and '-test' in sys.argv:
+            print("[i] 测试模式：跳过IP反查")
+            ip_domain_map = {}
+            cdn_ip_to_remove = set()
+        else:
+            ip_domain_map,cdn_ip_to_remove = await resolve_and_filter_domains(valid_ips, filter_domains, existing_cdn_dyn_ips, folder)
+            print("[✓] 完成反查域名")
         valid_ips = [ip for ip in valid_ips if ip not in cdn_ip_to_remove]
 
         await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map, redirect_domains, filter_domains)
         await write_representative_urls(folder, titles, urls)
         if not ONLY_DOMAIN_MODE:
             await run_security_scans(root, folder, report_path)
+        
+        # 域名处理完成，写入finish.txt
+        mark_classification_complete(folder)
 
     else:
         ip_domain_map = await ensure_base_info(
@@ -545,16 +623,24 @@ async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter
             print(f"[+] 只有 base_info 文件，准备处理")
 
             # 无论如何都要处理扩展结果
-            await merge_all_expanded_results(str(report_path), root, redirect_domains, filter_domains)
+            await merge_all_expanded_results(str(report_path), root, redirect_domains, filter_domains, None)
 
             # 生成 representative_urls.txt（测试模式也需要）
             await write_representative_urls(folder, titles, urls)
 
             if ONLY_DOMAIN_MODE:
                 print(f"[i] 跳过 run_security_scans，因启用了 --test")
+                # 测试模式也要写入finish.txt
+                mark_classification_complete(folder)
                 return
 
             await run_security_scans(root, folder, report_path)
+    
+    # 保存域名发现关系
+    save_domain_relationships(folder)
+    
+    # 域名处理完成，写入finish.txt
+    mark_classification_complete(folder)
 
 
 def prepare_domain_folder(root):
@@ -982,7 +1068,7 @@ def strip_url_scheme(url: str) -> str:
         return parsed.hostname or url  # fallback
     return url
 
-async def merge_all_expanded_results(report_folder: str, root_domain: str, redirect_domains: set = None, filter_domains: set = None):
+async def merge_all_expanded_results(report_folder: str, root_domain: str, redirect_domains: set = None, filter_domains: set = None, body_info_domains: set = None):
     if filter_domains is None:
         filter_domains = set()
     tuozhan_path = os.path.join(report_folder, "tuozhan")
@@ -1076,6 +1162,19 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
             if root != root_domain:
                 merged_roots_with_source.append((root, "URL跳转发现"))
     
+    # 添加从body中提取的域名（带来源标识，排除主域名）
+    if body_info_domains:
+        for domain in body_info_domains:
+            if domain != root_domain:
+                # 判断是否为主域名
+                root = extract_root_domain(domain)
+                if root and root == domain:
+                    # 是主域名
+                    merged_roots_with_source.append((domain, "URL BODY INFO"))
+                else:
+                    # 是子域名
+                    merged_urls_with_source.append((domain, "URL BODY INFO"))
+    
     for source, hosts in source_host_map.items():
         for host in hosts:
             if is_ip(host):
@@ -1144,7 +1243,7 @@ async def save_fofa_query_blacklist(blacklist: set[str]):
         for item in sorted(blacklist):
             await f.write(f"{item}\n")
 
-async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set=None, domain_list=None, use_hunter=False, hunter_proxies=None, hunter_ico_md5_list=None, cert_root_domains=None, cert_root_domain_map=None, ico_md5_url_map=None, ico_mmh3_url_map=None, body_md5_url_map=None, body_mmh3_url_map=None, title_set=None, title_url_map=None, enable_fofa: bool = True):
+async def write_expanded_reports(report_folder, root_domain=None, ico_mmh3_set=None, body_mmh3_set=None, domain_list=None, use_hunter=False, hunter_proxies=None, hunter_ico_md5_list=None, cert_root_domains=None, cert_root_domain_map=None, ico_md5_url_map=None, ico_mmh3_url_map=None, body_md5_url_map=None, body_mmh3_url_map=None, title_set=None, title_url_map=None, enable_fofa: bool = True):
 
     tuozhan_dir = Path(report_folder) / "tuozhan"
     fofa_dir = tuozhan_dir / "fofa"
@@ -1214,6 +1313,9 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                                 f.write(f"# 来源: {src}\n")
                         for domain in domains:
                             f.write(f"{domain}\n")
+                            # 记录FOFA发现关系
+                            if root_domain and domain != root_domain:
+                                record_domain_discovery(root_domain, domain, "FOFA搜索", f"通过icon_hash={hash_value}查询")
 
     if body_mmh3_set and enable_fofa:
         for hash_value in sorted(body_mmh3_set):
@@ -1240,6 +1342,9 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                         f.write(f"# 来源: {src}\n")
                 for domain in domains:
                     f.write(f"{domain}\n")
+                    # 记录FOFA发现关系
+                    if root_domain and domain != root_domain:
+                        record_domain_discovery(root_domain, domain, "FOFA搜索", f"通过body_hash={hash_value}查询")
 
     if cert_root_domains and enable_fofa:
         for domain in sorted(cert_root_domains):
@@ -1266,6 +1371,9 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                         f.write(f"# 来源: {src}\n")
                 for d in domains:
                     f.write(f"{d}\n")
+                    # 记录FOFA发现关系
+                    if root_domain and d != root_domain:
+                        record_domain_discovery(root_domain, d, "FOFA搜索", f"通过cert={domain}查询")
 
     # 添加标题搜索功能
     if title_set and enable_fofa:
@@ -1293,6 +1401,9 @@ async def write_expanded_reports(report_folder, ico_mmh3_set=None, body_mmh3_set
                         f.write(f"# 来源: {src}\n")
                 for domain in domains:
                     f.write(f"{domain}\n")
+                    # 记录FOFA发现关系
+                    if root_domain and domain != root_domain:
+                        record_domain_discovery(root_domain, domain, "FOFA搜索", f"通过title='{title[:30]}...'查询")
 
     # Hunter 标题搜索
     if use_hunter and title_set:
@@ -1400,6 +1511,9 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
                     if root_domain:
                         all_certs.add(cert)
                         cert_root_url_map[root_domain].add(url)
+                        # 记录证书关联域名
+                        if root_domain != root:
+                            record_domain_discovery(root, root_domain, "证书关联", f"SSL证书SAN域名")
                 if title and title.strip() and title not in black_titles:
                     all_titles.add(title.strip())
                     title_url_map[title.strip()].add(url)
@@ -1412,9 +1526,12 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
                 for domain in ip_domain_map[ip]:
                     all_reverse_domains.append(domain)
                     out.write(f"{indent2}- {domain}\n")
+                    # 记录域名发现关系
+                    record_domain_discovery(root, domain, "IP反查", f"IP地址{ip}反查发现")
 
         # === 4. URL body info 中抽取的域名 ===
         urls_for_root = [url for url in urls if url_body_info_map.get(url)]
+        body_info_domains = set()  # 收集body中发现的域名
         if urls_for_root:
             out.write(f"\n[URL BODY INFO - 域名(目前需要手动筛选): {root}]\n")
             url_domains_seen = {urlparse(url).hostname for url in urls_for_root if urlparse(url).hostname}
@@ -1424,12 +1541,15 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
                 for d in info.get("body_fqdn", []) + info.get("body_domains", []):
                     if d not in url_domains_seen:
                         domain_source_map[d].add(url)
+                        body_info_domains.add(d)  # 收集域名
 
             for domain, source_urls in domain_source_map.items():
                 if len(source_urls) == 1:
                     out.write(f"{indent1}{domain} [来源: {next(iter(source_urls))}]\n")
                 else:
                     out.write(f"{indent1}{domain} [来源数量: {len(source_urls)}]\n")
+                # 记录页面内容发现的域名
+                record_domain_discovery(root, domain, "页面内容", f"从{len(source_urls)}个页面中提取")
 
         # === 5. hash / cert 汇总 ===
         out.write(f"\n{'='*30}\n资源汇总:\n{'='*30}\n")
@@ -1462,15 +1582,16 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
         for key, url_infos in repeat_map.items():
             if len(url_infos) > 1:
                 main_url, main_title, *_, main_content_length = url_infos[0]
-                out.write(f"{indent1}- 重复于: {main_url}  标题: {main_title}\n")
+                out.write(f"{indent1}- 重复于: {main_url}  标题: {main_title}[size:{main_content_length}]\n")
                 for url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3, content_length in url_infos:
-                    out.write(f"{indent2}- {url}\n")
-                    out.write(f"{indent3}标题: {title}[size:{content_length}]\n")
+                    out.write(f"{indent2}- {url}[size:{content_length}]\n")
+                    out.write(f"{indent3}标题: {title}\n")
 
     # === 7. 写入扩展查询结果（FOFA / hunter）===
     if all_reverse_domains or all_icos_mmh3 or all_body_mmh3 or cert_root_url_map or all_titles:
         await write_expanded_reports(
             report_folder=report_folder,
+            root_domain=root,
             ico_mmh3_set=all_icos_mmh3,
             body_mmh3_set=all_body_mmh3,
             domain_list=all_reverse_domains,
@@ -1490,7 +1611,7 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
         )
 
     # === 8. 汇总 merge 报告 ===（移到条件外，确保总是执行）
-    await merge_all_expanded_results(report_folder, root, redirect_domains, filter_domains)
+    await merge_all_expanded_results(report_folder, root, redirect_domains, filter_domains, body_info_domains)
 
 
 async def write_representative_urls(folder, titles, urls):
@@ -1504,24 +1625,39 @@ async def write_representative_urls(folder, titles, urls):
     
     print(f"[DEBUG] 将要写入文件: {path}")
     
+    # 构建重复检测map，同base_info的逻辑
+    repeat_map = defaultdict(list)
+    for url in urls:
+        title, cert, ico, body_hash, url_ips, ico_mmh3, bd_mmh3, content_length = titles.get(url, ("", "", "", "", (), "", "", 0))
+        # 改进重复检测逻辑：主要基于body_hash和title，减少过度细分
+        # 如果title为空或是通用错误页面，则主要用body_hash
+        if not title or title in black_titles or title in ["403 Forbidden", "404 Not Found", "", "301 Moved Permanently"]:
+            key = (bd_mmh3, body_hash, content_length)  # 主要基于内容hash + 长度
+        else:
+            key = (title, bd_mmh3, content_length)  # 基于标题和内容hash + 长度
+        repeat_map[key].append((url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3, content_length))
+    
     written_urls = []
     filtered_urls = []
     
     with open(path, "w", encoding="utf-8") as f:
-        for i, url in enumerate(urls):
-            title, *_ = titles.get(url, ("", "", "", "", (), "", "", 0))
-            print(f"[DEBUG] 处理URL {i+1}/{len(urls)}: {url} - 标题: '{title}'")
+        # 只写入每组的第一个URL（代表性URL）
+        for url_list in repeat_map.values():
+            if not url_list:
+                continue
+            url, title, cert, ico, body_hash, ico_mmh3, bd_mmh3, content_length = url_list[0]
             
             # 只过滤真正的黑名单标题，空标题和其他标题都写入
             if title in black_titles:
                 print(f"[DEBUG] 过滤黑名单标题: {title}")
                 filtered_urls.append((url, title))
                 continue
+                
             f.write(url + "\n")
             written_urls.append((url, title))
-            print(f"[DEBUG] 写入URL: {url}")
+            print(f"[DEBUG] 写入代表性URL: {url} [{title}][size:{content_length}]")
     
-    print(f"[+] representative_urls.txt: 写入 {len(written_urls)} 个URL, 过滤 {len(filtered_urls)} 个黑名单URL")
+    print(f"[+] representative_urls.txt: 写入 {len(written_urls)} 个代表性URL (从 {len(urls)} 个总URL去重), 过滤 {len(filtered_urls)} 个黑名单URL")
     print(f"[DEBUG] 文件最终路径: {path}")
     
     # 验证文件是否真的写入成功
@@ -1737,26 +1873,59 @@ def main():
     if len(redirect_domains_all) > 0:
         print(f"   跳转域名示例: {list(redirect_domains_all)[:5]}")
     print(f"{'='*50}")
+    sys.stdout.flush()
 
+    # 添加调试信息
+    print(f"[DEBUG] 准备执行异步任务，域名数量: {len(domain_urls_map)}", flush=True)
+    print(f"[DEBUG] 域名列表: {list(domain_urls_map.keys())}", flush=True)
     
     # 异步任务放到 asyncio.run 中执行
-    asyncio.run(run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains_all))
+    try:
+        asyncio.run(run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains_all))
+    except Exception as e:
+        print(f"[ERROR] 异步任务执行出错: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # 收集所有新增的过滤域名并去重写入
+    if new_filtered_domains:
+        # 读取现有的过滤域名
+        existing_domains = set()
+        if DYNAMIC_FILTER_FILE.exists():
+            with open(DYNAMIC_FILTER_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        existing_domains.add(line)
+        
+        # 只写入新增的域名
+        new_domains_to_write = new_filtered_domains - existing_domains
+        if new_domains_to_write:
+            print(f"[+] 写入 {len(new_domains_to_write)} 个新增动态过滤域名")
+            with open(DYNAMIC_FILTER_FILE, "a", encoding="utf-8") as f:
+                for dom in sorted(new_domains_to_write):
+                    f.write(dom + "\n")
+    
+    print("[✓] 程序执行完成", flush=True)
 
 
 async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None):
     global SKIP_CURRENT_DOMAIN
-    print("[*] 开始逐个执行域名流程...")
+    print("[*] 开始逐个执行域名流程...", flush=True)
     sorted_domains = sorted(domain_urls_map.keys(), key=natural_sort_key)
+    print(f"[DEBUG] 将处理 {len(sorted_domains)} 个域名", flush=True)
 
-    for domain in sorted_domains:
+    for i, domain in enumerate(sorted_domains):
         if SKIP_CURRENT_DOMAIN:
             print(f"[!] 跳过域名: {domain}")
             SKIP_CURRENT_DOMAIN = False
             continue
 
         try:
+            print(f"[DEBUG] 处理域名 {i+1}/{len(sorted_domains)}: {domain}")
             ips = domain_ip_map[domain]
             urls = sorted(domain_urls_map.get(domain, []))
+            print(f"[DEBUG] {domain} 有 {len(ips)} 个IP, {len(urls)} 个URL")
             titles = {u: domain_titles_map.get(u, ("", "", "", "", (), "", "", 0)) for u in urls}
             await per_domain_flow_sync_async(domain, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains)
         except asyncio.CancelledError:
@@ -1764,6 +1933,8 @@ async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cd
             continue
         except Exception as e:
             print(f"[!] 执行 {domain} 出错: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 # ------------------------------------
