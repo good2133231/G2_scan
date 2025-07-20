@@ -31,25 +31,35 @@ def merge_layer_results(target_domain, layer, project_root="."):
     all_urls = set()
     all_domains = set()
     
-    # 遍历报告目录下的所有子目录
+    # 遍历报告目录
     if report_dir.exists():
-        for subdir in report_dir.iterdir():
-            if subdir.is_dir():
-                # 域名扫描结果
-                if (subdir / "domain_scan_results").exists():
-                    for domain_dir in (subdir / "domain_scan_results").iterdir():
-                        if domain_dir.is_dir():
-                            tuozhan_path = domain_dir / domain_dir.name / "tuozhan" / "all_tuozhan"
-                            if tuozhan_path.exists():
-                                collect_from_dir(tuozhan_path, all_ips, all_urls, all_domains)
-                
-                # 直接在report下的域名目录
-                else:
-                    for domain_dir in subdir.iterdir():
-                        if domain_dir.is_dir():
-                            tuozhan_path = domain_dir / "tuozhan" / "all_tuozhan"
-                            if tuozhan_path.exists():
-                                collect_from_dir(tuozhan_path, all_ips, all_urls, all_domains)
+        # Layer 2 特殊处理：report/domain_scan_results/域名/域名/tuozhan/all_tuozhan
+        if layer == 2:
+            domain_scan_results = report_dir / "domain_scan_results"
+            if domain_scan_results.exists():
+                for domain_dir in domain_scan_results.iterdir():
+                    if domain_dir.is_dir():
+                        # 实际结构是 域名/域名/tuozhan/all_tuozhan
+                        tuozhan_path = domain_dir / domain_dir.name / "tuozhan" / "all_tuozhan"
+                        if tuozhan_path.exists():
+                            collect_from_dir(tuozhan_path, all_ips, all_urls, all_domains)
+        else:
+            # Layer 3+ 标准处理
+            for subdir in report_dir.iterdir():
+                if subdir.is_dir():
+                    # 检查是否有 domain_scan_results 子目录
+                    domain_scan_results = subdir / "domain_scan_results"
+                    if domain_scan_results.exists():
+                        for domain_dir in domain_scan_results.iterdir():
+                            if domain_dir.is_dir():
+                                tuozhan_path = domain_dir / domain_dir.name / "tuozhan" / "all_tuozhan"
+                                if tuozhan_path.exists():
+                                    collect_from_dir(tuozhan_path, all_ips, all_urls, all_domains)
+                    else:
+                        # 直接检查子目录下的 tuozhan
+                        tuozhan_path = subdir / "tuozhan" / "all_tuozhan"
+                        if tuozhan_path.exists():
+                            collect_from_dir(tuozhan_path, all_ips, all_urls, all_domains)
     
     # 写入合并结果
     with open(merged_dir / "ip.txt", 'w') as f:

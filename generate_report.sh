@@ -1,5 +1,5 @@
 #!/bin/bash
-# 统一扫描报告生成脚本 - 支持多层扫描结果展示
+# 多层扫描报告生成脚本 - 支持所有层级扫描结果展示
 
 set -e
 
@@ -14,7 +14,7 @@ OPEN_BROWSER=false
 
 # 显示帮助信息
 show_help() {
-    echo "🎯 生成统一扫描HTML报告"
+    echo "🎯 生成多层扫描HTML报告"
     echo ""
     echo "用法:"
     echo "  ./generate_report.sh [域名] [选项]"
@@ -31,8 +31,8 @@ show_help() {
     echo "  ./generate_report.sh -o /tmp/report.html  # 指定输出文件"
     echo ""
     echo "说明:"
-    echo "  统一报告包含一层和多层扫描的所有结果"
-    echo "  自动解析标题信息、安全扫描结果等"
+    echo "  多层报告包含所有扫描层级的结果（Layer 1, 2, 3+）"
+    echo "  自动解析标题信息、安全扫描结果、层级关系等"
 }
 
 # 解析命令行参数
@@ -66,8 +66,8 @@ done
 
 echo "🚀 开始生成扫描报告..."
 
-# 构建Python命令 - 使用统一报告生成器
-PYTHON_CMD="python3 scripts/report/generate_unified_report.py"
+# 构建Python命令 - 使用树形报告生成器
+PYTHON_CMD="python3 scripts/report/generate_tree_report.py"
 
 if [ -n "$TARGET_DOMAIN" ]; then
     PYTHON_CMD="$PYTHON_CMD $TARGET_DOMAIN"

@@ -69,15 +69,26 @@ execute_multi_layer_scan() {
     while [ $current_layer -le 10 ]; do
         # 检查当前层是否已完成
         if [ $current_layer -eq 2 ]; then
+            # Layer 2 特殊处理：检查 expansion/report 目录下是否有域名扫描结果
             LAYER_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/report"
-            LAYER_MERGED_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/layer2/merged_targets"
+            # Layer 2 不创建 layer2 目录，直接检查 report 下的内容
+            if [ -d "$LAYER_DIR/domain_scan_results" ] && [ "$(ls -A "$LAYER_DIR/domain_scan_results" 2>/dev/null)" ]; then
+                LAYER_EXISTS=true
+            else
+                LAYER_EXISTS=false
+            fi
         else
             LAYER_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/layer${current_layer}/report"
             LAYER_MERGED_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/layer${current_layer}/merged_targets"
+            if [ -d "$LAYER_DIR" ] && [ -d "$LAYER_MERGED_DIR" ]; then
+                LAYER_EXISTS=true
+            else
+                LAYER_EXISTS=false
+            fi
         fi
         
         # 如果当前层已有结果，跳到下一层
-        if [ -d "$LAYER_DIR" ] && [ -d "$LAYER_MERGED_DIR" ]; then
+        if [ "$LAYER_EXISTS" = true ]; then
             echo "✅ 检测到第${current_layer}层已有扫描结果，跳过" | tee -a "$LOG_FILE"
             
             # 统计该层的扩展目标
@@ -85,14 +96,38 @@ execute_multi_layer_scan() {
             LAYER_URL_COUNT=0
             LAYER_DOMAIN_COUNT=0
             
-            if [ -f "$LAYER_MERGED_DIR/ip.txt" ]; then
-                LAYER_IP_COUNT=$(grep -v "^#" "$LAYER_MERGED_DIR/ip.txt" 2>/dev/null | wc -l || echo "0")
-            fi
-            if [ -f "$LAYER_MERGED_DIR/urls.txt" ]; then
-                LAYER_URL_COUNT=$(grep -v "^#" "$LAYER_MERGED_DIR/urls.txt" 2>/dev/null | wc -l || echo "0")
-            fi
-            if [ -f "$LAYER_MERGED_DIR/root_domains.txt" ]; then
-                LAYER_DOMAIN_COUNT=$(grep -v "^#" "$LAYER_MERGED_DIR/root_domains.txt" 2>/dev/null | wc -l || echo "0")
+            # Layer 2: 统计所有域名扫描结果的扩展目标总和
+            if [ $current_layer -eq 2 ]; then
+                DOMAIN_SCAN_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/expansion/report/domain_scan_results"
+                if [ -d "$DOMAIN_SCAN_DIR" ]; then
+                    # 遍历所有域名目录
+                    for domain_dir in "$DOMAIN_SCAN_DIR"/*; do
+                        if [ -d "$domain_dir" ]; then
+                            domain_name=$(basename "$domain_dir")
+                            tuozhan_dir="$domain_dir/$domain_name/tuozhan/all_tuozhan"
+                            if [ -d "$tuozhan_dir" ]; then
+                                # 统计IP
+                                if [ -f "$tuozhan_dir/ip.txt" ]; then
+                                    count=$(grep -v "^#" "$tuozhan_dir/ip.txt" 2>/dev/null | wc -l || echo "0")
+                                    LAYER_IP_COUNT=$((LAYER_IP_COUNT + count))
+                                fi
+                                # 统计URL
+                                if [ -f "$tuozhan_dir/urls.txt" ]; then
+                                    count=$(grep -v "^#" "$tuozhan_dir/urls.txt" 2>/dev/null | wc -l || echo "0")
+                                    LAYER_URL_COUNT=$((LAYER_URL_COUNT + count))
+                                fi
+                                # 统计域名
+                                if [ -f "$tuozhan_dir/root_domains.txt" ]; then
+                                    count=$(grep -v "^#" "$tuozhan_dir/root_domains.txt" 2>/dev/null | wc -l || echo "0")
+                                    LAYER_DOMAIN_COUNT=$((LAYER_DOMAIN_COUNT + count))
+                                fi
+                            fi
+                        fi
+                    done
+                fi
+            else
+                # Layer 3+: 暂时保持原逻辑，后续可能需要调整
+                echo "   注意: 第${current_layer}层统计逻辑待完善" | tee -a "$LOG_FILE"
             fi
             
             TOTAL_LAYER_TARGETS=$((LAYER_IP_COUNT + LAYER_URL_COUNT + LAYER_DOMAIN_COUNT))
@@ -267,7 +302,55 @@ if [ -z "$TARGET_DOMAIN" ]; then
     exit 1
 fi
 
+# 域名格式验证
+validate_domain() {
+    local domain="$1"
+    # 基本域名格式验证（允许子域名）
+    if echo "$domain" | grep -qE '^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+if ! validate_domain "$TARGET_DOMAIN"; then
+    echo "❌ 错误: 无效的域名格式: $TARGET_DOMAIN"
+    echo "💡 提示: 域名应该类似 example.com 或 subdomain.example.com"
+    exit 1
+fi
+
 echo "🎯 目标域名: $TARGET_DOMAIN"
+
+# 创建锁文件以防止并发扫描
+LOCK_FILE="$OUTPUT_DIR/$TARGET_DOMAIN/.scan.lock"
+if [ -f "$LOCK_FILE" ]; then
+    # 检查锁文件年龄（超过2小时认为是陈旧锁）
+    if [ -n "$(find "$LOCK_FILE" -mmin +120 2>/dev/null)" ]; then
+        echo "⚠️  发现陈旧锁文件，删除并继续" | tee -a "$LOG_FILE"
+        rm -f "$LOCK_FILE"
+    else
+        echo "❌ 错误: 另一个扫描进程正在运行中"
+        echo "💡 提示: 如果确定没有其他扫描，请删除锁文件: rm $LOCK_FILE"
+        exit 1
+    fi
+fi
+
+# 创建锁文件
+mkdir -p "$(dirname "$LOCK_FILE")"
+echo "PID: $$" > "$LOCK_FILE"
+echo "Start: $(date)" >> "$LOCK_FILE"
+
+# 清理函数
+cleanup() {
+    # 删除锁文件
+    rm -f "$LOCK_FILE"
+    
+    # 清理临时目录（如果设置了）
+    if [ -n "$TEMP_TARGETS" ] && [ -d "$TEMP_TARGETS" ]; then
+        rm -rf "$TEMP_TARGETS"
+    fi
+}
+trap cleanup EXIT INT TERM
 
 # 创建执行日志
 START_TIME=$(date +%s)
@@ -297,8 +380,45 @@ if [ -d "$OUTPUT_DIR/$TARGET_DOMAIN" ] && [ -f "$OUTPUT_DIR/$TARGET_DOMAIN/finis
     echo "✅ 检测到已有一层扫描结果: $OUTPUT_DIR/$TARGET_DOMAIN" | tee -a "$LOG_FILE"
 fi
 
-# 如果指定了多层扫描且已有一层结果，且未强制重新扫描，则直接执行多层扫描
-if [ "$SCAN_LEVEL" -gt 1 ] && [ "$FIRST_LAYER_EXISTS" = true ] && [ "$FORCE_RESCAN" = false ]; then
+# 如果已有一层结果且未强制重新扫描
+if [ "$FIRST_LAYER_EXISTS" = true ] && [ "$FORCE_RESCAN" = false ]; then
+    # 如果是一层扫描，直接显示结果并退出
+    if [ "$SCAN_LEVEL" -eq 1 ]; then
+        echo "✨ 一层扫描已完成，无需重复执行" | tee -a "$LOG_FILE"
+        echo "📂 查看结果: ls -la $OUTPUT_DIR/$TARGET_DOMAIN/" | tee -a "$LOG_FILE"
+        echo "💡 提示: 使用 -f 参数可强制重新执行一层扫描" | tee -a "$LOG_FILE"
+        echo "💡 提示: 使用 -s 2 参数执行二层扫描" | tee -a "$LOG_FILE"
+        
+        # 显示扩展目标统计
+        TUOZHAN_DIR="$OUTPUT_DIR/$TARGET_DOMAIN/tuozhan/all_tuozhan"
+        if [ -d "$TUOZHAN_DIR" ]; then
+            IP_COUNT=0
+            URL_COUNT=0
+            DOMAIN_COUNT=0
+            
+            if [ -f "$TUOZHAN_DIR/ip.txt" ]; then
+                IP_COUNT=$(grep -v '^#' "$TUOZHAN_DIR/ip.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            if [ -f "$TUOZHAN_DIR/urls.txt" ]; then
+                URL_COUNT=$(grep -v '^#' "$TUOZHAN_DIR/urls.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            if [ -f "$TUOZHAN_DIR/root_domains.txt" ]; then
+                DOMAIN_COUNT=$(grep -v '^#' "$TUOZHAN_DIR/root_domains.txt" 2>/dev/null | wc -l || echo "0")
+            fi
+            
+            if [ $IP_COUNT -gt 0 ] || [ $URL_COUNT -gt 0 ] || [ $DOMAIN_COUNT -gt 0 ]; then
+                echo "" | tee -a "$LOG_FILE"
+                echo "🔍 发现的扩展目标:" | tee -a "$LOG_FILE"
+                [ $IP_COUNT -gt 0 ] && echo "   IP目标: $IP_COUNT 个" | tee -a "$LOG_FILE"
+                [ $URL_COUNT -gt 0 ] && echo "   URL目标: $URL_COUNT 个" | tee -a "$LOG_FILE"
+                [ $DOMAIN_COUNT -gt 0 ] && echo "   域名目标: $DOMAIN_COUNT 个" | tee -a "$LOG_FILE"
+            fi
+        fi
+        
+        exit 0
+    fi
+    
+    # 如果是多层扫描，跳过一层直接执行
     echo "📊 跳过一层扫描，直接执行第${SCAN_LEVEL}层扫描" | tee -a "$LOG_FILE"
     echo "💡 提示: 使用 -f 参数可强制重新执行一层扫描" | tee -a "$LOG_FILE"
     
@@ -524,6 +644,91 @@ if [ -d "$TUOZHAN_DIR" ]; then
         echo "   IP目标: $IP_COUNT 个 (fscan端口扫描)" >> "$LOG_FILE"
         echo "   URL目标: $URL_COUNT 个 (httpx探测)" >> "$LOG_FILE"
         echo "   域名目标: $DOMAIN_COUNT 个 (完整扫描流程)" >> "$LOG_FILE"
+        
+        # 只在多层扫描时对扩展目标进行安全扫描
+        if [ "$SCAN_LEVEL" -ge 2 ] || [ "$UNLIMITED_SCAN" = true ]; then
+            echo "" | tee -a "$LOG_FILE"
+            echo "🔐 开始对扩展目标进行安全扫描..." | tee -a "$LOG_FILE"
+            
+            # 创建扫描结果目录
+            TUOZHAN_SCAN_DIR="$TUOZHAN_DIR/scan_results"
+            mkdir -p "$TUOZHAN_SCAN_DIR"
+            
+            # 对urls.txt进行httpx探测和afrog扫描
+            if [ -f "$TUOZHAN_DIR/urls.txt" ] && [ $URL_COUNT -gt 0 ]; then
+                echo "📌 对扩展域名进行HTTP探测和漏洞扫描..." | tee -a "$LOG_FILE"
+                
+                # 创建临时URL文件（将域名转换为https URL）
+                TEMP_URLS_FILE="$TUOZHAN_SCAN_DIR/temp_urls.txt"
+                > "$TEMP_URLS_FILE"
+                while IFS= read -r line; do
+                    # 跳过注释和空行
+                    if [[ ! "$line" =~ ^# ]] && [ -n "$line" ]; then
+                        if [[ ! "$line" =~ ^https?:// ]]; then
+                            echo "https://$line" >> "$TEMP_URLS_FILE"
+                        else
+                            echo "$line" >> "$TEMP_URLS_FILE"
+                        fi
+                    fi
+                done < "$TUOZHAN_DIR/urls.txt"
+                
+                # 先执行httpx探测获取标题信息
+                echo "[*] 执行httpx探测获取URL标题..." | tee -a "$LOG_FILE"
+                HTTPX_OUTPUT="$TUOZHAN_SCAN_DIR/httpx_urls_results.json"
+                HTTPX_CMD="cat $TUOZHAN_DIR/urls.txt | httpx -silent -json -o $HTTPX_OUTPUT -threads 50 -timeout 10"
+                
+                echo "[*] 执行命令: $HTTPX_CMD" | tee -a "$LOG_FILE"
+                eval $HTTPX_CMD 2>&1 | tee -a "$LOG_FILE"
+                
+                if [ -f "$HTTPX_OUTPUT" ]; then
+                    echo "[✓] urls.txt的httpx探测完成: $HTTPX_OUTPUT" | tee -a "$LOG_FILE"
+                else
+                    echo "[!] urls.txt的httpx探测失败" | tee -a "$LOG_FILE"
+                fi
+                
+                # 执行afrog扫描
+                AFROG_OUTPUT="$TUOZHAN_SCAN_DIR/afrog_urls_results.json"
+                if [ "$USE_TEST_MODE" = true ]; then
+                    AFROG_CMD="$SCRIPT_DIR/tools/scanner/afrog -T $TEMP_URLS_FILE -c 100 -rl 300 -timeout 2 -s spring -doh -json $AFROG_OUTPUT"
+                else
+                    AFROG_CMD="$SCRIPT_DIR/tools/scanner/afrog -T $TEMP_URLS_FILE -c 100 -rl 300 -timeout 2 -S high,info -doh -json $AFROG_OUTPUT"
+                fi
+                
+                echo "[*] 执行命令: $AFROG_CMD" | tee -a "$LOG_FILE"
+                $AFROG_CMD 2>&1 | tee -a "$LOG_FILE"
+                
+                if [ -f "$AFROG_OUTPUT" ]; then
+                    echo "[✓] urls.txt的afrog扫描完成: $AFROG_OUTPUT" | tee -a "$LOG_FILE"
+                else
+                    echo "[!] urls.txt的afrog扫描失败" | tee -a "$LOG_FILE"
+                fi
+            fi
+            
+            # 对ip.txt进行fscan扫描
+            if [ -f "$TUOZHAN_DIR/ip.txt" ] && [ $IP_COUNT -gt 0 ]; then
+                echo "📌 对扩展IP进行端口扫描..." | tee -a "$LOG_FILE"
+                
+                # 执行fscan扫描
+                FSCAN_OUTPUT="$TUOZHAN_SCAN_DIR/fscan_ips_results.txt"
+                if [ "$USE_TEST_MODE" = true ]; then
+                    FSCAN_CMD="$SCRIPT_DIR/tools/scanner/fscan -hf $TUOZHAN_DIR/ip.txt -p 80 -np -nobr -t 600 -o $FSCAN_OUTPUT"
+                else
+                    FSCAN_CMD="$SCRIPT_DIR/tools/scanner/fscan -hf $TUOZHAN_DIR/ip.txt -p all -np -nobr -t 600 -o $FSCAN_OUTPUT"
+                fi
+                
+                echo "[*] 执行命令: $FSCAN_CMD" | tee -a "$LOG_FILE"
+                $FSCAN_CMD 2>&1 | tee -a "$LOG_FILE"
+                
+                if [ -f "$FSCAN_OUTPUT" ]; then
+                    echo "[✓] ip.txt的fscan扫描完成: $FSCAN_OUTPUT" | tee -a "$LOG_FILE"
+                else
+                    echo "[!] ip.txt的fscan扫描失败" | tee -a "$LOG_FILE"
+                fi
+            fi
+            
+            echo "[✓] 扩展目标安全扫描完成" | tee -a "$LOG_FILE"
+            echo "" | tee -a "$LOG_FILE"
+        fi
         
         # 根据扫描层数决定是否自动执行多层扫描
         if [ "$SCAN_LEVEL" -ge 2 ] || [ "$UNLIMITED_SCAN" = true ]; then

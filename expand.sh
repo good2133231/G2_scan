@@ -93,29 +93,95 @@ if [ "$SCAN_LAYER" -eq 2 ]; then
     # 二层扫描：使用一层的扩展结果
     SCAN_DIR="output/$TARGET_DOMAIN/tuozhan/all_tuozhan"
     ERROR_MSG="未找到一层扫描结果，请先运行: ./scan.sh"
-elif [ "$SCAN_LAYER" -eq 3 ]; then
-    # 三层扫描：使用二层的合并结果
-    SCAN_DIR="output/$TARGET_DOMAIN/expansion/layer2/merged_targets"
-    ERROR_MSG="未找到二层扫描结果，请先运行: ./scan.sh -s 2"
+    
+    # 检查扫描结果是否存在
+    if [ ! -d "$SCAN_DIR" ]; then
+        echo "❌ 错误: $ERROR_MSG"
+        echo "   查找目录: $SCAN_DIR"
+        exit 1
+    fi
+    
+    # 检查是否有扩展数据
+    if [ ! -f "$SCAN_DIR/ip.txt" ] && [ ! -f "$SCAN_DIR/urls.txt" ] && [ ! -f "$SCAN_DIR/root_domains.txt" ]; then
+        echo "❌ 错误: 未找到扩展数据文件"
+        echo "请确保已完成上一层扫描并生成了扩展结果"
+        exit 1
+    fi
 else
-    # 更高层：使用上一层的合并结果
-    PREV_LAYER=$((SCAN_LAYER - 1))
-    SCAN_DIR="output/$TARGET_DOMAIN/expansion/layer${PREV_LAYER}/merged_targets"
-    ERROR_MSG="未找到第${PREV_LAYER}层扫描结果，请先运行: ./scan.sh -s ${PREV_LAYER}"
-fi
-
-# 检查扫描结果是否存在
-if [ ! -d "$SCAN_DIR" ]; then
-    echo "❌ 错误: $ERROR_MSG"
-    echo "   查找目录: $SCAN_DIR"
-    exit 1
-fi
-
-# 检查是否有扩展数据
-if [ ! -f "$SCAN_DIR/ip.txt" ] && [ ! -f "$SCAN_DIR/urls.txt" ] && [ ! -f "$SCAN_DIR/root_domains.txt" ]; then
-    echo "❌ 错误: 未找到扩展数据文件"
-    echo "请确保已完成上一层扫描并生成了扩展结果"
-    exit 1
+    # 三层及以上：特殊处理，需要遍历上一层的所有域名结果
+    echo "[*] 第${SCAN_LAYER}层扫描：收集上一层所有域名的扩展结果..."
+    
+    # 创建临时目录存储收集的目标
+    TEMP_TARGETS="temp/layer${SCAN_LAYER}_targets_$$"
+    mkdir -p "$TEMP_TARGETS"
+    touch "$TEMP_TARGETS/ip.txt" "$TEMP_TARGETS/urls.txt" "$TEMP_TARGETS/root_domains.txt"
+    
+    # 根据层数确定上一层的结果目录
+    if [ "$SCAN_LAYER" -eq 3 ]; then
+        # 三层：从二层的domain_scan_results收集
+        PREV_LAYER_DIR="output/$TARGET_DOMAIN/expansion/report/domain_scan_results"
+    else
+        # 四层及以上：从上一层的report收集
+        PREV_LAYER=$((SCAN_LAYER - 1))
+        PREV_LAYER_DIR="output/$TARGET_DOMAIN/expansion/layer${PREV_LAYER}/report/domain_scan_results"
+    fi
+    
+    # 收集所有域名的扩展结果
+    if [ -d "$PREV_LAYER_DIR" ]; then
+        echo "[*] 从目录收集: $PREV_LAYER_DIR"
+        for domain_dir in "$PREV_LAYER_DIR"/*; do
+            if [ -d "$domain_dir" ]; then
+                domain_name=$(basename "$domain_dir")
+                tuozhan_dir="$domain_dir/$domain_name/tuozhan/all_tuozhan"
+                
+                if [ -d "$tuozhan_dir" ]; then
+                    echo "   - 收集 $domain_name 的扩展结果"
+                    
+                    # 收集IP
+                    if [ -f "$tuozhan_dir/ip.txt" ]; then
+                        grep -v "^#" "$tuozhan_dir/ip.txt" 2>/dev/null >> "$TEMP_TARGETS/ip.txt" || true
+                    fi
+                    
+                    # 收集URL
+                    if [ -f "$tuozhan_dir/urls.txt" ]; then
+                        grep -v "^#" "$tuozhan_dir/urls.txt" 2>/dev/null >> "$TEMP_TARGETS/urls.txt" || true
+                    fi
+                    
+                    # 收集域名
+                    if [ -f "$tuozhan_dir/root_domains.txt" ]; then
+                        grep -v "^#" "$tuozhan_dir/root_domains.txt" 2>/dev/null >> "$TEMP_TARGETS/root_domains.txt" || true
+                    fi
+                fi
+            fi
+        done
+        
+        # 去重
+        sort -u "$TEMP_TARGETS/ip.txt" -o "$TEMP_TARGETS/ip.txt"
+        sort -u "$TEMP_TARGETS/urls.txt" -o "$TEMP_TARGETS/urls.txt"
+        sort -u "$TEMP_TARGETS/root_domains.txt" -o "$TEMP_TARGETS/root_domains.txt"
+        
+        # 统计
+        IP_COUNT=$(grep -v "^$" "$TEMP_TARGETS/ip.txt" | wc -l)
+        URL_COUNT=$(grep -v "^$" "$TEMP_TARGETS/urls.txt" | wc -l)
+        DOMAIN_COUNT=$(grep -v "^$" "$TEMP_TARGETS/root_domains.txt" | wc -l)
+        
+        echo "[*] 收集完成:"
+        echo "    - IP目标: $IP_COUNT 个"
+        echo "    - URL目标: $URL_COUNT 个"
+        echo "    - 域名目标: $DOMAIN_COUNT 个"
+        
+        if [ $IP_COUNT -eq 0 ] && [ $URL_COUNT -eq 0 ] && [ $DOMAIN_COUNT -eq 0 ]; then
+            echo "❌ 错误: 上一层扫描未发现任何扩展目标"
+            rm -rf "$TEMP_TARGETS"
+            exit 1
+        fi
+        
+        SCAN_DIR="$TEMP_TARGETS"
+    else
+        echo "❌ 错误: 未找到第$((SCAN_LAYER-1))层扫描结果"
+        echo "   查找目录: $PREV_LAYER_DIR"
+        exit 1
+    fi
 fi
 
 echo "[*] 开始第${SCAN_LAYER}层扩展扫描..."
@@ -171,12 +237,6 @@ if [ "$ACTION" = "run" ]; then
         ./run_all_expansions.sh
         echo ""
         echo "✅ 第${SCAN_LAYER}层扩展任务执行完成！"
-        
-        # 合并当前层的结果（为下一层准备）
-        echo "🔄 合并第${SCAN_LAYER}层扫描结果..."
-        cd "$SCAN_PROJECT_ROOT"
-        python3 scripts/management/merge_layer_results.py "$TARGET_DOMAIN" --layer "$SCAN_LAYER"
-        
         echo "📂 查看结果: ls -la output/$TARGET_DOMAIN/expansion/report/"
         echo "📊 最终报告: output/$TARGET_DOMAIN/expansion/report/"
     else
@@ -195,4 +255,9 @@ else
 fi
 
 echo ""
-echo "🎉 二层扫描操作完成！"
+echo "🎉 第${SCAN_LAYER}层扫描操作完成！"
+
+# 清理临时目录
+if [ -d "$TEMP_TARGETS" ]; then
+    rm -rf "$TEMP_TARGETS"
+fi

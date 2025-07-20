@@ -57,7 +57,12 @@ ONLY_DOMAIN_MODE = '-test' in sys.argv
 RESULT_JSON_PATH = "temp/result_all.json"
 
 if ONLY_DOMAIN_MODE:
-
+    # 如果是测试模式且没有result_all.json，使用测试数据
+    if not os.path.exists(RESULT_JSON_PATH):
+        test_data_path = os.path.join(PROJECT_ROOT, "test_data_real_ips.json")
+        if os.path.exists(test_data_path):
+            print(f"[*] 测试模式：使用测试数据 {test_data_path}")
+            shutil.copy(test_data_path, RESULT_JSON_PATH)
     print("[*] 仅处理域名模式 (-test)，将跳过安全扫描任务")
 SKIP_CURRENT_DOMAIN = False
 

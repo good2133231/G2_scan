@@ -36,10 +36,12 @@ class ExpansionProcessor:
             # 二层保持原有结构以兼容
             self.expansion_logs = self.expansion_base / "logs"
             self.expansion_tasks = self.expansion_base / "tasks"
+            self.result_base = f"output/{target_domain}/expansion/report"
             self.expansion_report = self.expansion_base / "report"
         else:
             # 三层及以上使用新结构
             layer_base = self.expansion_base / f"layer{scan_layer}"
+            self.result_base = f"output/{target_domain}/expansion/layer{scan_layer}/report"
             self.expansion_logs = layer_base / "logs"
             self.expansion_tasks = layer_base / "tasks"
             self.expansion_report = layer_base / "report"
@@ -184,6 +186,21 @@ class ExpansionProcessor:
             
             # 创建扫描脚本
             scan_script = task_dir / "scan_ips.sh"
+            
+            # 根据层数计算IP扫描路径上升级数
+            if self.scan_layer == 2:
+                # Layer 2: task_dir是 output/vtmarkets.com/expansion/tasks/ip_scans/task_xx/
+                # 需要上升6级到项目根目录
+                path_levels = "../../../../../.."
+            elif self.scan_layer == 3:
+                # Layer 3: task_dir是 expansion/layer3/tasks/ip_scans/task_xx/
+                # 需要上升8级到项目根目录
+                path_levels = "../../../../../../../"
+            else:
+                # Layer 4+: task_dir是 expansion/layer{N}/tasks/ip_scans/task_xx/
+                # 需要上升8级到项目根目录
+                path_levels = "../../../../../../../"
+            
             with open(scan_script, "w") as f:
                 f.write(f"""#!/bin/bash
 # IP扫描脚本 - 来源: {source_name}
@@ -192,7 +209,7 @@ class ExpansionProcessor:
 set -e
 
 # 设置项目根目录环境变量
-export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../../.." && pwd)"
+export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/{path_levels}" && pwd)"
 
 # 创建日志目录并设置日志文件
 mkdir -p "$SCAN_PROJECT_ROOT/temp/log"
@@ -205,7 +222,7 @@ echo "来源: {source_name}" | tee -a "$LOG_FILE"
 echo "目标文件: targets.txt" | tee -a "$LOG_FILE"
 echo "扫描IP数量: {len(ips)}" | tee -a "$LOG_FILE"
 echo "" | tee -a "$LOG_FILE"
-
+echo $SCAN_PROJECT_ROOT
 # 检查工具
 if [ ! -f "$SCAN_PROJECT_ROOT/tools/scanner/fscan" ]; then
     echo "❌ 错误: fscan工具不存在" | tee -a "$LOG_FILE"
@@ -243,8 +260,8 @@ if [ "$filtered_count" -eq 0 ]; then
     echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
     
     # 仍然保存日志
-    mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))"
-    cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/"
+    mkdir -p "$SCAN_PROJECT_ROOT/{self.result_base}/ip_scan_results/$(basename $(pwd))"
+    cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/{self.result_base}/ip_scan_results/$(basename $(pwd))/"
     exit 0
 fi
 
@@ -273,19 +290,19 @@ fi
 
 # 创建统一输出目录
 echo "[*] 整理扫描结果..." | tee -a "$LOG_FILE"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))"
-cp fscan_result.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
-cp targets_filtered.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/targets_used.txt" 2>/dev/null || true
+mkdir -p "$SCAN_PROJECT_ROOT/{self.result_base}/ip_scan_results/$(basename $(pwd))"
+cp fscan_result.txt "$SCAN_PROJECT_ROOT/{self.result_base}/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
+cp targets_filtered.txt "$SCAN_PROJECT_ROOT/{self.result_base}/ip_scan_results/$(basename $(pwd))/targets_used.txt" 2>/dev/null || true
 
 # 复制fscan发现的URL文件
 if [ -f fscan_url.txt ]; then
-    cp fscan_url.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
+    cp fscan_url.txt "$SCAN_PROJECT_ROOT/{self.result_base}/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
     echo "   已保存fscan发现的URL文件" | tee -a "$LOG_FILE"
 fi
 
-cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/"
+cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/{self.result_base}/ip_scan_results/$(basename $(pwd))/"
 
-echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" | tee -a "$LOG_FILE"
+echo "✅ 结果已保存到: {self.result_base}/ip_scan_results/$(basename $(pwd))/" | tee -a "$LOG_FILE"
 echo "[*] 日志文件: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
 """)
@@ -360,6 +377,21 @@ echo "[*] 完成时间: $(date)"
 
         # 创建扫描脚本
         scan_script = url_scan_dir / "scan_urls.sh"
+        
+        # 根据层数计算URL扫描路径上升级数
+        if self.scan_layer == 2:
+            # Layer 2: url_scan_dir是 output/vtmarkets.com/expansion/tasks/url_scans/
+            # 需要上升5级到项目根目录
+            path_levels = "../../../../.."
+        elif self.scan_layer == 3:
+            # Layer 3: url_scan_dir是 expansion/layer3/tasks/url_scans/
+            # 需要上升7级到项目根目录
+            path_levels = "../../../../../../"
+        else:
+            # Layer 4+: url_scan_dir是 expansion/layer{N}/tasks/url_scans/
+            # 需要上升7级到项目根目录
+            path_levels = "../../../../../../"
+        
         with open(scan_script, "w") as f:
             f.write(f"""#!/bin/bash
 # URL扫描脚本
@@ -369,7 +401,7 @@ echo "[*] 完成时间: $(date)"
 set -e
 
 # 设置项目根目录环境变量
-export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../.." && pwd)"
+export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/{path_levels}" && pwd)"
 
 # 创建日志目录并设置日志文件
 mkdir -p "$SCAN_PROJECT_ROOT/temp/log"
@@ -410,12 +442,12 @@ fi
 
 # 创建统一输出目录
 echo "[*] 整理扫描结果..." | tee -a "$LOG_FILE"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/"
-cp httpx_result.json "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/" 2>/dev/null || true
-cp targets.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/targets_used.txt"
-cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/url_scan_results/"
+mkdir -p "$SCAN_PROJECT_ROOT/{self.result_base}/url_scan_results/"
+cp httpx_result.json "$SCAN_PROJECT_ROOT/{self.result_base}/url_scan_results/" 2>/dev/null || true
+cp targets.txt "$SCAN_PROJECT_ROOT/{self.result_base}/url_scan_results/targets_used.txt"
+cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/{self.result_base}/url_scan_results/"
 
-echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/url_scan_results/" | tee -a "$LOG_FILE"
+echo "✅ 结果已保存到: {self.result_base}/url_scan_results/" | tee -a "$LOG_FILE"
 echo "[*] 日志文件: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
 """)
@@ -432,9 +464,21 @@ echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
         domain_scan_dir.mkdir(exist_ok=True)
         
         # 限制域名数量，避免资源浪费
-        max_domains = 10
+        max_domains = int(os.environ.get('MAX_DOMAIN_SCAN_TARGETS', 10))
+        # 尝试从配置文件读取
+        try:
+            import configparser
+            config = configparser.ConfigParser()
+            config_path = self.project_root / 'config' / 'scan_config.ini'
+            if config_path.exists():
+                config.read(config_path)
+                max_domains = config.getint('scan', 'max_domain_scan_targets', fallback=max_domains)
+        except:
+            pass
+            
         if len(root_domain_targets) > max_domains:
             print(f"[!] 根域名数量过多({len(root_domain_targets)})，限制为前{max_domains}个")
+            print(f"[!] 可通过环境变量 MAX_DOMAIN_SCAN_TARGETS 或配置文件调整此限制")
             root_domain_targets = root_domain_targets[:max_domains]
         
         task_scripts = []
@@ -472,6 +516,21 @@ echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
             
             # 创建扫描脚本
             scan_script = task_dir / "scan.sh"
+            
+            # 根据层数计算路径上升级数
+            if self.scan_layer == 2:
+                # Layer 2: task_dir是 output/vtmarkets.com/expansion/tasks/domain_scans/task_xx/
+                # 需要上升6级到项目根目录
+                path_levels = "../../../../../.."
+            elif self.scan_layer == 3:
+                # Layer 3: task_dir是 expansion/layer3/tasks/domain_scans/task_xx/
+                # 需要上升8级到项目根目录  
+                path_levels = "../../../../../../../"
+            else:
+                # Layer 4+: task_dir是 expansion/layer{N}/tasks/domain_scans/task_xx/
+                # 需要上升8级到项目根目录
+                path_levels = "../../../../../../../"
+            
             with open(scan_script, "w") as f:
                 f.write(f"""#!/bin/bash
 # 根域名完整扫描脚本: {domain}
@@ -481,7 +540,7 @@ echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
 set -e
 
 # 设置项目根目录环境变量
-export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../../.." && pwd)"
+export SCAN_PROJECT_ROOT="$(cd "$(dirname "$0")/{path_levels}" && pwd)"
 
 # 创建日志目录并设置日志文件
 mkdir -p "$SCAN_PROJECT_ROOT/temp/log"
@@ -575,21 +634,21 @@ echo "[*] 扫描完成: {domain}" | tee -a "$LOG_FILE"
 
 # 创建统一输出目录
 echo "[*] 整理扫描结果..." | tee -a "$LOG_FILE"
-mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
+mkdir -p "$SCAN_PROJECT_ROOT/{self.result_base}/domain_scan_results/{domain}/"
 
 # 复制扫描结果文件
 if [ -f "temp/result_all.json" ]; then
-    cp temp/result_all.json "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
+    cp temp/result_all.json "$SCAN_PROJECT_ROOT/{self.result_base}/domain_scan_results/{domain}/"
 fi
 
 if [ -d "output" ]; then
-    cp -r output/* "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
+    cp -r output/* "$SCAN_PROJECT_ROOT/{self.result_base}/domain_scan_results/{domain}/"
 fi
 
 # 复制日志文件
-cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/"
+cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/{self.result_base}/domain_scan_results/{domain}/"
 
-echo "✅ 结果已保存到: output/{self.target_domain}/expansion/report/domain_scan_results/{domain}/" | tee -a "$LOG_FILE"
+echo "✅ 结果已保存到: {self.result_base}/domain_scan_results/{domain}/" | tee -a "$LOG_FILE"
 echo "[*] 日志文件: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "[*] 完成时间: $(date)" | tee -a "$LOG_FILE"
 """)
@@ -759,10 +818,8 @@ echo "[*] 完成时间: $(date)"
         self.generate_summary(ip_targets, url_targets, root_domain_targets)
         
         print(f"\n[✓] 扩展任务生成完成!")
-        
-        # 如果不是二层，合并当前层的所有扫描结果
-        if self.scan_layer != 2:
-            self.merge_layer_results()
+        print(f"[✓] 任务目录: {self.expansion_tasks}")
+        print(f"[✓] 执行命令: cd {self.expansion_tasks} && ./run_all_expansions.sh")
         
         return True
     
