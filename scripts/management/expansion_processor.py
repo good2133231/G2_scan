@@ -217,50 +217,72 @@ if [ ! -f "$SCAN_PROJECT_ROOT/scripts/utils/cdn_checker.py" ]; then
     exit 1
 fi
 
-# CDN过滤
+# CDN过滤 - 暂时跳过，直接使用原始IP
 echo "========================================" | tee -a "$LOG_FILE"
 echo "时间: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
-echo "步骤: CDN过滤" | tee -a "$LOG_FILE"
-echo "命令: python3 scripts/utils/cdn_checker.py --input targets.txt --output targets_filtered.txt --verbose" | tee -a "$LOG_FILE"
+echo "步骤: 跳过CDN过滤，直接使用原始IP列表" | tee -a "$LOG_FILE"
 echo "========================================" | tee -a "$LOG_FILE"
 
-TASK_DIR=$(pwd)
-cd "$SCAN_PROJECT_ROOT"
-python3 scripts/utils/cdn_checker.py --input "$TASK_DIR/targets.txt" --output "$TASK_DIR/targets_filtered.txt" --verbose 2>&1 | tee -a "$LOG_FILE"
-cd - > /dev/null
-
-# 检查过滤后结果
-if [ -f targets_filtered.txt ]; then
-    filtered_count=$(grep -E "^[0-9]" targets_filtered.txt | wc -l 2>/dev/null || echo "0")
-    echo "CDN过滤结果: $filtered_count 个IP" | tee -a "$LOG_FILE"
-else
-    filtered_count=0
-    echo "CDN过滤结果: 0 个IP" | tee -a "$LOG_FILE"
-fi
-
-if [ "$filtered_count" -eq 0 ]; then
-    echo "[!] 警告: CDN过滤后没有剩余IP，跳过fscan扫描" | tee -a "$LOG_FILE"
-    echo "[*] 任务完成时间: $(date)" | tee -a "$LOG_FILE"
-    
-    # 仍然保存日志
-    mkdir -p "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))"
-    cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/"
-    exit 0
-fi
+# 直接使用targets.txt作为targets_filtered.txt
+cp targets.txt targets_filtered.txt
+filtered_count=$(grep -E "^[0-9]" targets_filtered.txt | wc -l 2>/dev/null || echo "0")
+echo "使用原始IP: $filtered_count 个" | tee -a "$LOG_FILE"
 
 # 执行fscan扫描
 echo "========================================" | tee -a "$LOG_FILE"
 echo "时间: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 echo "步骤: fscan端口扫描" | tee -a "$LOG_FILE"
-echo "命令: $SCAN_PROJECT_ROOT/tools/scanner/fscan -hf targets_filtered.txt -p all -np -nobr -t 600 -o fscan_result.txt" | tee -a "$LOG_FILE"
+echo "命令: $SCAN_PROJECT_ROOT/tools/scanner/fscan -hf targets_filtered.txt -p 21,22,23,25,53,80,110,139,143,443,993,995,1433,3306,3389,5432,6379,8080,8443,9090,27017 -np -nobr -t 120 -o fscan_result.txt" | tee -a "$LOG_FILE"
 echo "========================================" | tee -a "$LOG_FILE"
 
-"$SCAN_PROJECT_ROOT/tools/scanner/fscan" -hf targets_filtered.txt -p all -np -nobr -t 600 -o fscan_result.txt 2>&1 | tee -a "$LOG_FILE"
+"$SCAN_PROJECT_ROOT/tools/scanner/fscan" -hf targets_filtered.txt -p 21,22,23,25,53,80,110,139,143,443,993,995,1433,3306,3389,5432,6379,8080,8443,9090,27017 -np -nobr -t 120 -o fscan_result.txt 2>&1 | tee -a "$LOG_FILE"
 
 # 检查扫描结果
 if [ -f fscan_result.txt ]; then
     result_lines=$(wc -l < fscan_result.txt 2>/dev/null || echo "0")
     echo "fscan扫描结果: $result_lines 行记录" | tee -a "$LOG_FILE"
+    
+    # 从fscan结果中提取URL
+    echo "========================================" | tee -a "$LOG_FILE"
+    echo "时间: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
+    echo "步骤: 从fscan结果提取URL" | tee -a "$LOG_FILE"
+    echo "========================================" | tee -a "$LOG_FILE"
+    
+    # 使用Python脚本提取URL
+    if [ -f "$SCAN_PROJECT_ROOT/scripts/utils/extract_fscan_urls.py" ]; then
+        python3 "$SCAN_PROJECT_ROOT/scripts/utils/extract_fscan_urls.py" fscan_result.txt extracted_urls.txt 2>&1 | tee -a "$LOG_FILE"
+        
+        if [ -f extracted_urls.txt ]; then
+            url_count=$(wc -l < extracted_urls.txt 2>/dev/null || echo "0")
+            echo "提取到URL数量: $url_count 个" | tee -a "$LOG_FILE"
+            
+            # 将URL添加到扩展目标
+            if [ "$url_count" -gt 0 ]; then
+                echo "[*] 将URL添加到扩展目标..." | tee -a "$LOG_FILE"
+                expansion_urls_file="$SCAN_PROJECT_ROOT/output/{self.target_domain}/tuozhan/all_tuozhan/urls_from_fscan.txt"
+                mkdir -p "$(dirname "$expansion_urls_file")"
+                
+                # 添加来源注释
+                echo "# URLs discovered by fscan - $(date)" >> "$expansion_urls_file"
+                echo "# Source: IP scan task $(basename $(pwd))" >> "$expansion_urls_file"
+                cat extracted_urls.txt >> "$expansion_urls_file"
+                echo "   已添加到扩展目标: $expansion_urls_file" | tee -a "$LOG_FILE"
+                
+                # 同时更新主urls.txt文件
+                main_urls_file="$SCAN_PROJECT_ROOT/output/{self.target_domain}/tuozhan/all_tuozhan/urls.txt"
+                if [ -f "$main_urls_file" ]; then
+                    # 去重添加到现有文件
+                    (cat "$main_urls_file" extracted_urls.txt | sort -u > temp_urls.txt && mv temp_urls.txt "$main_urls_file")
+                else
+                    # 直接复制
+                    cp extracted_urls.txt "$main_urls_file"
+                fi
+                echo "   已更新主URL文件: $main_urls_file" | tee -a "$LOG_FILE"
+            fi
+        fi
+    else
+        echo "⚠️ 警告: URL提取脚本不存在" | tee -a "$LOG_FILE"
+    fi
     
     # 检查是否有url.txt文件（fscan发现的URL）
     if [ -f fscan_url.txt ]; then
@@ -281,6 +303,12 @@ cp targets_filtered.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansio
 if [ -f fscan_url.txt ]; then
     cp fscan_url.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
     echo "   已保存fscan发现的URL文件" | tee -a "$LOG_FILE"
+fi
+
+# 复制提取的URL文件
+if [ -f extracted_urls.txt ]; then
+    cp extracted_urls.txt "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/" 2>/dev/null || true
+    echo "   已保存提取的URL文件" | tee -a "$LOG_FILE"
 fi
 
 cp "$LOG_FILE" "$SCAN_PROJECT_ROOT/output/{self.target_domain}/expansion/report/ip_scan_results/$(basename $(pwd))/"
@@ -728,9 +756,46 @@ echo "[*] 完成时间: $(date)"
         
         print(f"[+] 生成任务摘要: {summary_file}")
 
+    def check_existing_results(self):
+        """检查是否已有扫描结果"""
+        # 检查IP扫描结果
+        ip_results_dir = self.expansion_report / "ip_scan_results"
+        if ip_results_dir.exists():
+            result_count = 0
+            for task_dir in ip_results_dir.iterdir():
+                if task_dir.is_dir() and (task_dir / "fscan_result.txt").exists():
+                    result_count += 1
+            if result_count > 0:
+                print(f"[✓] 检测到已存在 {result_count} 个IP扫描结果")
+                return True
+        
+        # 检查域名扫描结果
+        domain_results_dir = self.expansion_report / "domain_scan_results"
+        if domain_results_dir.exists():
+            result_count = 0
+            for domain_dir in domain_results_dir.iterdir():
+                if domain_dir.is_dir() and (domain_dir / domain_dir.name / "finish.txt").exists():
+                    result_count += 1
+            if result_count > 0:
+                print(f"[✓] 检测到已存在 {result_count} 个域名扫描结果")
+                return True
+        
+        return False
+
     def process(self):
         """主处理流程"""
         print(f"\n[*] 开始处理扩展任务...")
+        
+        # 检查是否已有结果
+        if self.check_existing_results():
+            print(f"[!] 检测到已存在的扫描结果，跳过任务生成")
+            print(f"[!] 如需重新扫描，请先删除 {self.expansion_report} 目录")
+            
+            # 如果不是二层，合并当前层的所有扫描结果
+            if self.scan_layer != 2:
+                self.merge_layer_results()
+            
+            return True
         
         # 检查输入文件
         if not self.tuozhan_dir.exists():

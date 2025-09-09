@@ -1,0 +1,141 @@
+.scan-results {
+  width: 100%;
+}
+
+.layer-selector {
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.filter-notice {
+  background: rgba(24, 144, 255, 0.1);
+  border: 1px solid rgba(24, 144, 255, 0.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  color: var(--color-primary);
+  text-align: center;
+}
+
+.results-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.section-card {
+  border-radius: 12px;
+  box-shadow: var(--shadow-light);
+  border: 1px solid var(--border-color);
+}
+
+.section-card .ant-card-head-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.subsection {
+  margin-bottom: 32px;
+}
+
+.subsection:last-child {
+  margin-bottom: 0;
+}
+
+.subsection h4 {
+  margin-bottom: 16px;
+  color: var(--text-regular);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.fofa-results,
+.content-mining {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.fofa-item,
+.mining-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.fofa-item:last-child,
+.mining-item:last-child {
+  border-bottom: none;
+}
+
+.fofa-item a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.fofa-item a:hover {
+  text-decoration: underline;
+}
+
+.ip-scan-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ip-details {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.vuln-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.vuln-item:last-child {
+  border-bottom: none;
+}
+
+/* 表格样式优化 */
+.ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: #f5f5f5;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .layer-selector {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  
+  .ip-scan-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .fofa-item,
+  .mining-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

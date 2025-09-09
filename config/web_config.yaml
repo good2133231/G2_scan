@@ -1,0 +1,59 @@
+# Web报告系统配置文件
+# 请根据实际需求修改配置
+
+# 服务器配置
+server:
+  host: "0.0.0.0"          # 监听地址，0.0.0.0表示监听所有网络接口
+  port: 5000               # 服务端口
+  debug: false             # 调试模式，生产环境请设为false
+
+# 认证配置
+auth:
+  enabled: true            # 是否启用认证
+  username: "admin"        # 用户名
+  password: "MyStr0ngP@ssw0rd!"     # 密码（请修改！）
+  
+# 安全配置
+security:
+  secret_key: "CrjyTF-GorBecz2XdLnrcQ5dW8bZfA6pEqyMJHTlckY"  # Flask密钥（请修改！）
+  session_cookie_secure: false     # HTTPS时设为true
+  session_cookie_httponly: true    # 防止JS读取cookie
+  session_cookie_samesite: "Lax"   # CSRF保护
+
+# IP白名单（留空则允许所有IP访问）
+ip_whitelist: []
+  # - "1.2.3.4"
+  # - "5.6.7.8"
+  # - "192.168.1.0/24"  # 支持CIDR格式
+
+# 数据目录配置
+data:
+  output_dir: "output"     # 扫描结果目录
+  
+# 日志配置
+logging:
+  enabled: true            # 是否启用日志
+  level: "INFO"            # 日志级别: DEBUG, INFO, WARNING, ERROR
+  file: "logs/web_report.log"  # 日志文件路径
+  max_size: "10MB"         # 日志文件最大大小
+  backup_count: 5          # 保留的日志文件数量
+
+# 界面配置
+ui:
+  title: "渗透扫描平台"  # 页面标题
+  theme: "default"         # 界面主题
+  items_per_page: 20       # 每页显示条目数
+
+# 功能开关
+features:
+  search: true             # 搜索功能
+  graph: true              # 关系图谱
+  export: true             # 导出功能
+  realtime_update: false   # 实时更新（开发中）
+
+# 调试模式配置
+debug:
+  enabled: true            # 是否启用调试模式
+  show_command_paths: true # 显示命令启动路径
+  verbose_logging: true    # 详细日志输出
+  scan_debug: true         # 扫描过程调试

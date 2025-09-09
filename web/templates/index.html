@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+
+{% block title %}域名资产 - 渗透扫描平台{% endblock %}
+
+{% block content %}
+<el-main>
+    <!-- 统计卡片 -->
+    <el-row :gutter="20" class="stats-row">
+        <el-col :span="6">
+            <el-card class="stat-card">
+                <div class="stat-icon" style="background: var(--primary-color);">
+                    <i class="fas fa-globe"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ stats.total_domains ]]</div>
+                    <div class="stat-label">扫描域名</div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="6">
+            <el-card class="stat-card">
+                <div class="stat-icon" style="background: var(--success-color);">
+                    <i class="fas fa-link"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ stats.total_urls ]]</div>
+                    <div class="stat-label">发现URL</div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="6">
+            <el-card class="stat-card">
+                <div class="stat-icon" style="background: var(--warning-color);">
+                    <i class="fas fa-network-wired"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ stats.total_ips ]]</div>
+                    <div class="stat-label">IP/端口</div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="6">
+            <el-card class="stat-card">
+                <div class="stat-icon" style="background: var(--danger-color);">
+                    <i class="fas fa-bug"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ stats.total_vulnerabilities ]]</div>
+                    <div class="stat-label">漏洞数量</div>
+                </div>
+            </el-card>
+        </el-col>
+    </el-row>
+    
+    <!-- 新建扫描 -->
+    <el-card class="search-card">
+        <div slot="header" class="card-header">
+            <span><i class="fas fa-plus-circle"></i> 新建扫描任务</span>
+        </div>
+        <el-row :gutter="20">
+            <el-col :span="12">
+                <el-input
+                    v-model="newScanDomain"
+                    placeholder="输入要扫描的域名 (如: example.com)"
+                    @keyup.enter="startNewScan">
+                    <template slot="prepend">域名</template>
+                </el-input>
+            </el-col>
+            <el-col :span="6">
+                <el-select v-model="scanMode" placeholder="扫描模式">
+                                                        <el-option label="快速扫描 (正式模式)" value="1"></el-option>
+                                    <el-option label="快速扫描 (测试模式)" value="1_test"></el-option>
+                                    <el-option label="深度扫描 (未实现)" value="2" disabled></el-option>
+                </el-select>
+            </el-col>
+            <el-col :span="6">
+                <el-button type="primary" @click="startNewScan" icon="el-icon-search" :loading="scanLoading">
+                    开始扫描
+                </el-button>
+            </el-col>
+        </el-row>
+        <div style="margin-top: 10px; font-size: 12px; color: #909399;">
+            <i class="el-icon-info"></i>
+            快速扫描：扫描主域名 + 快速扫描扩展资产 | 
+            深度扫描：扫描主域名 + 把扩展域名作为独立域名完整扫描
+        </div>
+    </el-card>
+    
+    <!-- 搜索和筛选 -->
+    <el-card class="search-card">
+        <el-row :gutter="20">
+            <el-col :span="16">
+                <el-input
+                    v-model="searchQuery"
+                    placeholder="搜索域名..."
+                    prefix-icon="el-icon-search"
+                    @keyup.enter="searchDomains"
+                    clearable>
+                </el-input>
+            </el-col>
+            <el-col :span="8">
+                <el-button type="primary" @click="searchDomains" icon="el-icon-search">搜索</el-button>
+                <el-button @click="refreshData" icon="el-icon-refresh">刷新</el-button>
+            </el-col>
+        </el-row>
+    </el-card>
+    
+    <!-- 域名列表 -->
+    <el-card>
+        <div slot="header" class="card-header">
+            <span><i class="fas fa-list"></i> 域名列表</span>
+            <el-tag type="info" size="small">[[ domains.length ]] 个域名</el-tag>
+        </div>
+        
+        <el-table
+            :data="domains"
+            v-loading="loading"
+            style="width: 100%"
+            @row-click="viewDomain">
+            
+            <el-table-column
+                prop="name"
+                label="域名"
+                width="300">
+                <template slot-scope="scope">
+                    <div class="domain-name">
+                        <i class="fas fa-globe" style="color: #409EFF; margin-right: 8px;"></i>
+                        <span style="cursor: pointer; color: #409EFF;">[[ scope.row.name ]]</span>
+                        
+                        <!-- 扫描状态标签 -->
+                        <el-tag v-if="scope.row.status === 'scanning'" 
+                                type="primary" 
+                                size="mini" 
+                                effect="plain"
+                                style="margin-left: 10px;">
+                            <i class="el-icon-loading"></i> 扫描中 ([[ scope.row.progress || 0 ]]%)
+                        </el-tag>
+                        <el-tag v-else-if="scope.row.status === 'completed'" 
+                                type="success" 
+                                size="mini" 
+                                effect="plain"
+                                style="margin-left: 10px;">
+                            <i class="fas fa-check"></i> 已完成
+                        </el-tag>
+                        <el-tag v-else-if="scope.row.status === 'failed'" 
+                                type="danger" 
+                                size="mini" 
+                                effect="plain"
+                                style="margin-left: 10px;">
+                            <i class="fas fa-times"></i> 失败
+                        </el-tag>
+                        <el-tag v-else-if="scope.row.status === 'error'" 
+                                type="warning" 
+                                size="mini" 
+                                effect="plain"
+                                style="margin-left: 10px;">
+                            <i class="fas fa-exclamation"></i> 错误
+                        </el-tag>
+                    </div>
+                </template>
+            </el-table-column>
+            
+            <!-- 新增：全部数据列（放首位） -->
+            <el-table-column
+                label="全部数据"
+                width="180"
+                align="center">
+                <template slot-scope="scope">
+                    <!-- 只在全部数据列显示扫描状态 -->
+                    <div v-if="scope.row.status === 'scanning'">
+                        <el-tag size="mini" type="primary">
+                            <i class="el-icon-loading"></i> 扫描中
+                        </el-tag>
+                        <div style="margin-top: 5px;">
+                            <el-progress :percentage="scope.row.progress || 0" 
+                                       status="active" 
+                                       :stroke-width="4"
+                                       :show-text="false"
+                                       style="width: 120px;">
+                            </el-progress>
+                            <div style="font-size: 11px; color: #666;">[[ scope.row.progress || 0 ]]%</div>
+                        </div>
+                    </div>
+                    <div v-else-if="scope.row.status === 'completed'" class="completed-stats">
+                        <el-tag size="mini" type="success">
+                            <i class="fas fa-check"></i> 已完成
+                        </el-tag>
+                        <div v-if="domainStats[scope.row.name]" style="margin-top: 5px;">
+                            <div style="font-size: 11px; color: #666;">
+                                [[ domainStats[scope.row.name].total_urls ]] URLs
+                                · [[ domainStats[scope.row.name].total_ips ]] IPs
+                                · [[ domainStats[scope.row.name].total_domains ]] 域名
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else>
+                        <el-tag size="mini" :type="scope.row.status === 'failed' ? 'danger' : 'warning'">
+                            <i class="fas fa-exclamation"></i> [[ scope.row.status ]]
+                        </el-tag>
+                    </div>
+                </template>
+            </el-table-column>
+            
+            <!-- 新增：子域名状态列 -->
+            <el-table-column
+                label="子域名状态"
+                width="150"
+                align="center">
+                <template slot-scope="scope">
+                    <div v-if="scope.row.status === 'completed' && domainStats[scope.row.name]">
+                        <div style="margin-bottom: 3px;">
+                            <el-tag size="mini" type="info">
+                                总数: [[ domainStats[scope.row.name].subdomains_total || 0 ]]
+                            </el-tag>
+                        </div>
+                        <div>
+                            <el-tag size="mini" type="success">
+                                存活: [[ domainStats[scope.row.name].subdomains_alive || 0 ]]
+                            </el-tag>
+                            <el-tag size="mini" type="info" v-if="domainStats[scope.row.name].subdomains_total - domainStats[scope.row.name].subdomains_alive > 0">
+                                失效: [[ domainStats[scope.row.name].subdomains_total - domainStats[scope.row.name].subdomains_alive ]]
+                            </el-tag>
+                        </div>
+                    </div>
+                    <div v-else-if="scope.row.status === 'scanning'">
+                        <el-tag size="mini" type="primary">
+                            <i class="el-icon-loading"></i> 扫描中
+                        </el-tag>
+                    </div>
+                    <div v-else>
+                        <span style="color: #999; font-size: 12px;">--</span>
+                    </div>
+                </template>
+            </el-table-column>
+            
+            <el-table-column
+                prop="layers"
+                label="扫描层数"
+                width="100"
+                align="center">
+                <template slot-scope="scope">
+                    <el-tag :type="getLayerTagType(scope.row.layers)" size="small">
+                        [[ scope.row.layers ]] 层
+                    </el-tag>
+                </template>
+            </el-table-column>
+            
+            <el-table-column
+                prop="scan_time"
+                label="扫描时间"
+                width="180">
+            </el-table-column>
+            
+            <el-table-column
+                label="漏洞详情"
+                min-width="200">
+                <template slot-scope="scope">
+                    <!-- 只显示漏洞信息 -->
+                    <div v-if="scope.row.status === 'completed' && domainStats[scope.row.name]">
+                        <div v-if="domainStats[scope.row.name].vulnerabilities > 0">
+                            <el-tag size="mini" type="danger">
+                                <i class="fas fa-bug"></i> [[ domainStats[scope.row.name].vulnerabilities ]] 个漏洞
+                            </el-tag>
+                        </div>
+                        <div v-else>
+                            <el-tag size="mini" type="success">
+                                <i class="fas fa-shield-alt"></i> 暂无漏洞
+                            </el-tag>
+                        </div>
+                    </div>
+                    <div v-else-if="scope.row.status === 'scanning'">
+                        <el-tag size="mini" type="primary">
+                            <i class="el-icon-loading"></i> 扫描中...
+                        </el-tag>
+                    </div>
+                    <div v-else>
+                        <span style="color: #999; font-size: 12px;">--</span>
+                    </div>
+                </template>
+            </el-table-column>
+            
+            <el-table-column
+                label="操作"
+                width="200"
+                align="center">
+                <template slot-scope="scope">
+                    <el-button-group>
+                        <el-button size="mini" type="primary" @click.stop="viewDomain(scope.row)">
+                            <i class="fas fa-eye"></i> 查看
+                        </el-button>
+                        <el-button size="mini" type="danger" @click.stop="deleteDomain(scope.row)">
+                            <i class="fas fa-trash"></i> 删除
+                        </el-button>
+                    </el-button-group>
+                </template>
+            </el-table-column>
+        </el-table>
+    </el-card>
+</el-main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+new Vue({
+    el: '#app',
+    mixins: [baseMixin],
+    delimiters: ['[[', ']]'],
+            data() {
+            return {
+                domains: [],
+                domainStats: {},
+                stats: {
+                    total_domains: 0,
+                    total_urls: 0,
+                    total_ips: 0,
+                    total_vulnerabilities: 0
+                },
+                loading: false,
+                searchQuery: '',
+                newScanDomain: '',
+                scanMode: '1',
+                scanLoading: false
+            }
+        },
+    mounted() {
+        this.loadDomains();
+        this.loadStats();
+        // 每10秒刷新域名列表以获取最新状态
+        setInterval(() => {
+            this.loadDomains();
+        }, 10000);
+    },
+    methods: {
+        async loadDomains() {
+            this.loading = true;
+            try {
+                const response = await this.$axios.get('/api/domains');
+                this.domains = response.data.data;
+                
+                // 加载每个域名的统计信息 - 健壮版本
+                this.domains.forEach((domain, index) => {
+                    if (domain && 
+                        typeof domain === 'object' && 
+                        domain.name && 
+                        typeof domain.name === 'string' && 
+                        domain.name.trim() !== '' &&
+                        domain.name !== 'undefined') {
+                        this.loadDomainStats(domain.name);
+                    } else {
+                        console.warn(`跳过无效域名 [${index}]:`, domain);
+                    }
+                });
+            } catch (error) {
+                this.$message.error('加载域名列表失败');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async loadDomainStats(domain) {
+            // 严格验证域名参数
+            if (!domain || 
+                typeof domain !== 'string' || 
+                domain.trim() === '' ||
+                domain === 'undefined' ||
+                domain === 'null') {
+                console.warn('loadDomainStats: 跳过无效域名参数', domain);
+                return;
+            }
+            
+            const cleanDomain = domain.trim();
+            
+            try {
+                const response = await this.$axios.get(`/api/domain/${cleanDomain}/summary`);
+                this.$set(this.domainStats, cleanDomain, response.data.data);
+            } catch (error) {
+                console.error(`加载 ${cleanDomain} 统计信息失败:`, error.message);
+            }
+        },
+        
+        async loadStats() {
+            try {
+                const response = await this.$axios.get('/api/stats');
+                this.stats = response.data.data;
+            } catch (error) {
+                console.error('加载统计信息失败');
+            }
+        },
+        
+        viewDomain(row) {
+            window.location.href = `/domain/${row.name}`;
+        },
+        
+        async deleteDomain(row) {
+            this.$confirm(`确定要删除域名 ${row.name} 的所有扫描数据吗？`, '提示', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }).then(async () => {
+                try {
+                    const response = await this.$axios.delete(`/api/domain/${row.name}`);
+                    if (response.data.status === 'success') {
+                        this.$message.success(response.data.message);
+                        // 重新加载数据
+                        this.loadDomains();
+                        this.loadStats();
+                    } else {
+                        this.$message.error(response.data.message);
+                    }
+                } catch (error) {
+                    this.$message.error('删除失败：' + (error.response?.data?.message || error.message));
+                }
+            }).catch(() => {
+                this.$message.info('已取消删除');
+            });
+        },
+        
+        searchDomains() {
+            if (this.searchQuery) {
+                // 实现搜索逻辑
+                this.$message.info('搜索功能开发中...');
+            }
+        },
+        
+        refreshData() {
+            this.loadDomains();
+            this.loadStats();
+            this.$message.success('数据已刷新');
+        },
+        
+        getLayerTagType(layers) {
+            if (layers >= 3) return 'danger';
+            if (layers === 2) return 'warning';
+            return 'success';
+        },
+        
+        async startNewScan() {
+            if (!this.newScanDomain) {
+                this.$message.warning('请输入要扫描的域名');
+                return;
+            }
+            
+            // 验证域名格式 - 更宽松的验证
+            const domainPattern = /^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?)*\.[a-z]{2,}$/i;
+            if (!domainPattern.test(this.newScanDomain.trim())) {
+                this.$message.error('域名格式不正确，请输入有效的域名，如: example.com');
+                return;
+            }
+            
+            this.scanLoading = true;
+            
+            try {
+                const response = await this.$axios.post('/api/scan', {
+                    domain: this.newScanDomain,
+                    mode: this.scanMode
+                });
+                
+                if (response.data.status === 'success') {
+                    this.$message.success(response.data.message);
+                    
+                    // 保存域名用于跳转
+                    const scanDomain = this.newScanDomain;
+                    this.newScanDomain = '';
+                    
+                    // 提示用户查看扫描状态
+                    this.$notify({
+                        title: '扫描已启动',
+                        message: `域名 ${scanDomain} 的扫描已开始，点击查看实时状态`,
+                        duration: 8000,
+                        type: 'success',
+                        onClick: () => {
+                            window.location.href = `/domain/${scanDomain}`;
+                        }
+                    });
+                    
+                    // 3秒后刷新列表
+                    setTimeout(() => {
+                        this.refreshData();
+                    }, 3000);
+                } else {
+                    this.$message.warning(response.data.message);
+                }
+            } catch (error) {
+                if (error.response && error.response.status === 409) {
+                    this.$message.warning(error.response.data.message);
+                } else {
+                    this.$message.error('启动扫描失败：' + (error.response?.data?.message || error.message));
+                }
+            } finally {
+                this.scanLoading = false;
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

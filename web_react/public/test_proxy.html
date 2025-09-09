@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API代理测试</title>
+</head>
+<body>
+    <h1>API代理测试</h1>
+    <button onclick="testAPI()">测试API</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.innerHTML = '测试中...';
+            
+            try {
+                // 测试健康检查API
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                result.innerHTML = `<pre>成功: ${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                result.innerHTML = `<pre>错误: ${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

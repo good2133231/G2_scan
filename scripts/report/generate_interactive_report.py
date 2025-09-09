@@ -1356,8 +1356,32 @@ def generate_vulnerabilities_section(vulnerabilities):
 """
     
     for vuln in vulnerabilities:
-        severity = vuln.get('severity', 'unknown').lower()
-        content += f"""
+        # 兼容afrog的输出格式
+        if 'pocinfo' in vuln:
+            # afrog格式
+            pocinfo = vuln.get('pocinfo', {})
+            severity = pocinfo.get('infoseg', 'info').lower()
+            if severity == 'high':
+                severity_class = 'high'
+            elif severity == 'medium':
+                severity_class = 'medium'
+            else:
+                severity_class = 'low'
+            
+            content += f"""
+        <div class="vulnerability {severity_class}">
+            <strong>{pocinfo.get('infoname', pocinfo.get('id', 'Unknown'))}</strong> 
+            <span style="color: #e74c3c;">[{pocinfo.get('infoseg', 'INFO').upper()}]</span><br>
+            <strong>目标:</strong> {vuln.get('fulltarget', vuln.get('target', 'N/A'))}<br>
+            <strong>POC ID:</strong> {pocinfo.get('id', 'N/A')}<br>
+            <strong>作者:</strong> {pocinfo.get('infoauthor', 'N/A')}<br>
+            {f'<strong>描述:</strong> {pocinfo.get("infodescription", "")}' if pocinfo.get('infodescription') else ''}
+        </div>
+"""
+        else:
+            # 其他格式兼容
+            severity = vuln.get('severity', 'unknown').lower()
+            content += f"""
         <div class="vulnerability {severity}">
             <strong>{vuln.get('name', 'Unknown')}</strong> 
             <span style="color: #e74c3c;">[{vuln.get('severity', 'UNKNOWN')}]</span><br>

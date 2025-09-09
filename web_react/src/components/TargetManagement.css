@@ -1,0 +1,108 @@
+.target-management {
+  width: 100%;
+}
+
+.target-management .ant-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f0f0f0;
+}
+
+.target-management .ant-statistic-title {
+  color: var(--text-regular);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.target-management .ant-statistic-content {
+  color: var(--text-primary);
+}
+
+.target-management .ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.target-management .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.target-management .ant-table-tbody > tr:hover > td {
+  background: #f5f5f5;
+}
+
+.target-management .ant-tag {
+  border-radius: 6px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.target-management .ant-btn {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.target-management .ant-btn-primary {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+}
+
+.target-management .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+}
+
+.target-management .ant-modal {
+  border-radius: 12px;
+}
+
+.target-management .ant-modal-header {
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(135deg, #f0f2f5 0%, #ffffff 100%);
+}
+
+.target-management .ant-form-item-label > label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.target-management .ant-input,
+.target-management .ant-input-affix-wrapper {
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+  transition: all 0.3s ease;
+}
+
+.target-management .ant-input:focus,
+.target-management .ant-input-affix-wrapper:focus,
+.target-management .ant-input-focused,
+.target-management .ant-input-affix-wrapper-focused {
+  border-color: #40a9ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.target-management .ant-pagination {
+  margin-top: 24px;
+  text-align: center;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .target-management .ant-table {
+    font-size: 12px;
+  }
+  
+  .target-management .ant-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  
+  .target-management .ant-space {
+    flex-wrap: wrap;
+  }
+}

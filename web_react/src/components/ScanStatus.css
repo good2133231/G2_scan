@@ -1,0 +1,107 @@
+.scan-status {
+  width: 100%;
+}
+
+.status-card {
+  text-align: center;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.status-card .ant-statistic-title {
+  color: var(--text-regular);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.status-card .ant-statistic-content {
+  color: var(--text-primary);
+}
+
+.timeline-content {
+  width: 100%;
+}
+
+.stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.stage-header h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.stage-details {
+  margin-top: 8px;
+}
+
+.time-info {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.stage-description {
+  color: var(--text-regular);
+  font-size: 13px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #f6f8fa;
+  border-radius: 6px;
+}
+
+.stage-error {
+  color: #ff4d4f;
+  font-size: 13px;
+  padding: 8px 12px;
+  background: rgba(255, 77, 79, 0.1);
+  border: 1px solid rgba(255, 77, 79, 0.3);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+/* Timeline 样式优化 */
+.ant-timeline-item-content {
+  margin-left: 24px;
+}
+
+.ant-timeline-item-tail {
+  border-left-color: #e8e8e8;
+}
+
+.ant-timeline-item-head {
+  background: white;
+  border-color: #e8e8e8;
+}
+
+/* 进度条样式 */
+.ant-progress-line {
+  margin-bottom: 8px;
+}
+
+.ant-progress-text {
+  color: var(--text-regular);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .stage-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .time-info span {
+    display: block;
+    margin-left: 0 !important;
+    margin-top: 4px;
+  }
+  
+  .ant-timeline-item-content {
+    margin-left: 16px;
+  }
+}

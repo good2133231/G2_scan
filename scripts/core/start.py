@@ -65,7 +65,9 @@ SKIP_CURRENT_DOMAIN = False
 CDN_LIST_PATH = os.path.join(PROJECT_ROOT, "config/filters/cdn.txt")
 CDN_DYNAMIC_PATH = os.path.join(PROJECT_ROOT, "config/filters/cdn_动态添加_一年清一次.txt")
 DYNAMIC_FILTER_FILE = Path(os.path.join(PROJECT_ROOT, "config/filters/filter_domains-动态.txt"))
+DYNAMIC_IP_FILTER_FILE = Path(os.path.join(PROJECT_ROOT, "config/filters/filter-ip-动态.txt"))
 new_filtered_domains = set()
+new_filtered_ips = set()
 
 black_titles = {
         "Just a moment...",
@@ -114,7 +116,19 @@ def record_domain_discovery(from_domain, to_domain, method, details):
     # 避免重复记录
     if relationship not in domain_discovery_relationships:
         domain_discovery_relationships.append(relationship)
-        print(f"[记录] {from_domain} -> {to_domain} (通过{method})")
+        
+        # 实时更新扫描状态中的域名发现信息
+        try:
+            update_script = os.path.join(PROJECT_ROOT, "scripts/utils/update_discovered_domains.py")
+            subprocess.run([
+                "python3", update_script, from_domain, to_domain, f"--method={method}"
+            ], capture_output=True, text=True)
+        except Exception as e:
+            print(f"[!] 更新域名发现状态失败: {e}")
+        
+        # 减少打印频率，每10条记录打印一次进度
+        if len(domain_discovery_relationships) % 10 == 0:
+            print(f"[进度] 已记录 {len(domain_discovery_relationships)} 条域名发现关系")
 
 def save_domain_relationships(output_folder):
     """保存域名发现关系到文件"""
@@ -311,6 +325,12 @@ def load_filter_domains(path):
         return {line.strip().lower() for line in open(path, encoding="utf-8") if line.strip()}
     return set()
 
+# 载入过滤IP
+def load_filter_ips(path):
+    if os.path.exists(path):
+        return {line.strip() for line in open(path, encoding="utf-8") if line.strip() and not line.startswith("#")}
+    return set()
+
 # 载入CDN IP段
 def load_cdn_ranges(path):
     ranges = []
@@ -359,10 +379,17 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
     seen_ips = set()
     for idx, line in enumerate(lines_chunk):
         try:
-            item = json.loads(line)
-            url = item.get("url", "").strip()
-            final_url = item.get("final_url", "").strip()  # 使用-follow-redirects时的最终URL
-            location_url = item.get("location", "").strip()  # 不使用-follow-redirects时的跳转位置
+            # 确保line是字符串
+            if isinstance(line, dict):
+                item = line
+            else:
+                item = json.loads(line)
+            url = item.get("url", "") or ""
+            url = url.strip() if url else ""
+            final_url = item.get("final_url", "") or ""
+            final_url = final_url.strip() if final_url else ""
+            location_url = item.get("location", "") or ""
+            location_url = location_url.strip() if location_url else ""
             
             # 处理跳转信息（支持两种情况）
             redirect_url = final_url if (final_url and final_url != url) else location_url
@@ -414,14 +441,26 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
                 except Exception:
                     pass
 
-            title = item.get("title", "").strip()
+            title = item.get("title", "") or ""
+            title = title.strip() if title else ""
             tls_info = item.get("tls", {})  
-            cert = tls_info.get("subject_cn", "").strip()
-            ico = item.get("favicon_md5", "").strip()
-            ico_mmh3 = item.get("favicon", "").strip()
+            cert = tls_info.get("subject_cn", "") or ""
+            cert = cert.strip() if cert else ""
+            ico = item.get("favicon_md5", "") or ""
+            ico = ico.strip() if ico else ""
+            # 处理favicon字段，可能是对象或字符串
+            favicon_data = item.get("favicon", "")
+            if isinstance(favicon_data, dict):
+                # 如果favicon是对象，提取hash值
+                ico_mmh3 = str(favicon_data.get("hash", ""))
+            else:
+                # 如果是字符串或其他类型
+                ico_mmh3 = str(favicon_data) if favicon_data else ""
             hash_info = item.get("hash", {})
-            bd_hash = hash_info.get("body_md5", "").strip()
-            bd_mmh3 = hash_info.get("body_mmh3", "").strip()
+            bd_hash = hash_info.get("body_md5", "") or ""
+            bd_hash = bd_hash.strip() if bd_hash else ""
+            bd_mmh3 = hash_info.get("body_mmh3", "") or ""
+            bd_mmh3 = bd_mmh3.strip() if bd_mmh3 else ""
             a_ips = item.get("a", [])
             content_length = item.get("content_length", 0)
 
@@ -454,14 +493,16 @@ def parse_json_lines_chunk(lines_chunk, cdn_ranges, existing_cdn_dyn_ips, filter
             status_code = item.get("status_code")  # 确认实际字段
             if status_code is None:
                 status_code = 0  # 或者默认一个值，防止报错
-            # 特殊状态码单独处理
-            if status_code in (403, 404):
+            # 状态码处理 - 放宽限制，保留更多结果
+            # 记录非200状态码但不跳过处理
+            if status_code not in (200, 301, 302):
                 filtered_non_200_urls.append((url, status_code))
-                continue  # 跳过正常流程，但记录特殊状态码
-            elif status_code not in (200, 301, 302):
-                # 其他非正常状态码也记录
-                filtered_non_200_urls.append((url, status_code))
-                continue  # 跳过后续正常流程
+            
+            # 只跳过真正无响应的（状态码0）和5xx错误
+            if status_code == 0 or status_code >= 500:
+                # 但即使是5xx错误，如果有title也保留
+                if not title or title == "":
+                    continue  # 只有既是错误又没有title才跳过
             url_title_list.append((url, title, cert, ico, bd_hash, tuple(sorted(a_ips)),ico_mmh3,bd_mmh3,content_length))
 
             for ip in a_ips:
@@ -553,10 +594,10 @@ async def ensure_base_info(root, report_path, valid_ips, urls, titles, filter_do
         print(ip_domain_map)
         await write_base_report(root, report_path, valid_ips, urls, titles, ip_domain_map, url_body_info_map, redirect_domains)
         return ip_domain_map
-async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None):
+async def per_domain_flow_sync_async(root, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None, filtered_ips=None):
     print(f"\n[>] 执行域名流程: {root}", flush=True)
     folder = prepare_domain_folder(root)
-    valid_ips = write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips)
+    valid_ips = write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips, filtered_ips)
     write_urls(folder, urls)
     # 不在这里写finish.txt，改为在域名处理完成后写入
 
@@ -657,7 +698,7 @@ def natural_sort_key(s):
     # 分割字符串，数字转int，字母小写
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
-def write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips):
+def write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips, filtered_ips=None):
     valid_ips = []
     input_folder = folder / "input"
     input_folder.mkdir(exist_ok=True)
@@ -678,9 +719,14 @@ def write_valid_ips(folder, ips, cdn_ranges, existing_cdn_dyn_ips):
             if ip in existing_all_ips:
                 print(f"[!] 已存在于 all_a_records.txt 中，跳过: {ip}")
                 continue
+            if filtered_ips and ip in filtered_ips:
+                print(f"[!] 已存在于 filter-ip-动态.txt 中，跳过: {ip}")
+                continue
             a.write(ip + "\n")
             all_a.write(ip + "\n")
             valid_ips.append(ip)
+            # 添加到new_filtered_ips以便后续写入
+            new_filtered_ips.add(ip)
 
     return valid_ips
 
@@ -699,6 +745,14 @@ def mark_classification_complete(folder):
         with open(folder / "finish.txt", "w", encoding="utf-8") as f:
             f.write("分类完成")
         print(f"[✓] 标记分类完成: {folder}/finish.txt")
+        
+        # 复制 result_all.json 到域名目录，供Web界面使用
+        import shutil
+        result_json_source = Path(RESULT_JSON_PATH)
+        if result_json_source.exists():
+            result_json_dest = folder / "result_all.json"
+            shutil.copy2(result_json_source, result_json_dest)
+            print(f"[✓] 复制原始扫描数据: {result_json_dest}")
     except Exception as e:
         print(f"[!] 写入 finish.txt 失败: {e}")
 
@@ -1081,6 +1135,9 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
 
     a_record_path = f"{existing_report_folder}/input/a_records.txt"
     existing_ips = await read_lines_from_file(a_record_path)
+    
+    # 加载动态过滤IP列表
+    filtered_ips = load_filter_ips(str(DYNAMIC_IP_FILTER_FILE))
 
     # 保存来源映射: {详细来源: set(域名/IP)}
     source_host_map = defaultdict(set)
@@ -1178,7 +1235,13 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
     for source, hosts in source_host_map.items():
         for host in hosts:
             if is_ip(host):
-                merged_ips_with_source.append((host, source))
+                # 过滤已存在于filter-ip-动态.txt中的IP
+                if host not in filtered_ips:
+                    merged_ips_with_source.append((host, source))
+                    # 添加到new_filtered_ips以便后续写入
+                    new_filtered_ips.add(host)
+                else:
+                    print(f"[!] IP {host} 已存在于 filter-ip-动态.txt 中，跳过")
             else:
                 # 判断是否为主域名
                 root = extract_root_domain(host)
@@ -1192,10 +1255,18 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
     
     # 写入 ip.txt - 只存IP但标识来源
     ip_txt_path = os.path.join(all_dir, "ip.txt")
+    # 使用set去重，确保没有重复IP
+    unique_ips_with_source = []
+    seen_ips = set()
+    for ip, source in merged_ips_with_source:
+        if ip not in seen_ips:
+            seen_ips.add(ip)
+            unique_ips_with_source.append((ip, source))
+    
     async with aiofiles.open(ip_txt_path, "w") as f:
-        if merged_ips_with_source:
+        if unique_ips_with_source:
             current_source = None
-            for ip, source in sorted(merged_ips_with_source, key=lambda x: (x[1], x[0])):
+            for ip, source in sorted(unique_ips_with_source, key=lambda x: (x[1], x[0])):
                 if current_source != source:
                     current_source = source
                     await f.write(f"# 来源: {source}\n")
@@ -1228,6 +1299,11 @@ async def merge_all_expanded_results(report_folder: str, root_domain: str, redir
                 await f.write(f"{root}\n")
         else:
             await f.write("# 暂无根域名目标\n")
+    
+    # 将root_domains加入到new_filtered_domains以便写入filter-domain-动态.txt
+    if merged_roots_with_source:
+        for root, source in merged_roots_with_source:
+            new_filtered_domains.add(root)
 
 async def load_fofa_query_blacklist() -> set[str]:
     try:
@@ -1520,14 +1596,18 @@ async def write_base_report(root: str, report_folder: Path, valid_ips: set[str],
 
         # === 3. IP反查域名 ===
         out.write("\nIP反查域名:\n")
+        # 使用set来去重反查域名
+        unique_reverse_domains = set()
         for ip in sorted(valid_ips):
             if ip in ip_domain_map:
                 out.write(f"{indent1}[IP] {ip}\n")
                 for domain in ip_domain_map[ip]:
-                    all_reverse_domains.append(domain)
+                    unique_reverse_domains.add(domain)
                     out.write(f"{indent2}- {domain}\n")
                     # 记录域名发现关系
                     record_domain_discovery(root, domain, "IP反查", f"IP地址{ip}反查发现")
+        # 将去重后的域名转换为列表
+        all_reverse_domains = list(unique_reverse_domains)
 
         # === 4. URL body info 中抽取的域名 ===
         urls_for_root = [url for url in urls if url_body_info_map.get(url)]
@@ -1673,10 +1753,17 @@ async def write_representative_urls(folder, titles, urls):
 
 
 async def run_security_scans(root, folder, report_folder):
+    print(f"\n{'='*60}")
+    print(f"[安全扫描] 开始对域名 {root} 进行安全扫描")
+    print(f"{'='*60}")
+    
     afrog_report = report_folder / f"afrog_report_{root}.json"
     fscan_report = report_folder / f"fscan_result_{root}.txt"
     afrog_target_file = folder / "input" / "representative_urls.txt"
     fscan_target_file = folder / "input" / "a_records.txt"
+    
+    # AFROG 扫描部分
+    print(f"\n[步骤1/2] AFROG漏洞扫描")
     print(f"[*] 检查afrog目标文件: {afrog_target_file}")
     if not afrog_target_file.exists():
         empty_file = report_folder / "afrog目标为空.txt"
@@ -1691,6 +1778,7 @@ async def run_security_scans(root, folder, report_folder):
         print(f"[+] afrog目标文件有效，包含 {target_count} 个URL目标")
         afrog_cmd = AFROG_CMD_TEMPLATE.format(target_file=str(afrog_target_file), output_file=str(afrog_report))
         print(f"[*] 执行afrog扫描命令: {afrog_cmd}")
+        print(f"[*] 正在进行漏洞扫描，请稍候...")
         result = await run_cmd_async(afrog_cmd)
         if result is None:
             print(f"[!] afrog扫描失败，跳过")
@@ -1698,6 +1786,8 @@ async def run_security_scans(root, folder, report_folder):
         else:
             print(f"[✓] afrog扫描完成，报告保存至: {afrog_report}")
 
+    # FSCAN 扫描部分
+    print(f"\n[步骤2/2] FSCAN端口扫描")
     print(f"[*] 检查fscan目标文件: {fscan_target_file}")
     if not fscan_target_file.exists():
         empty_file = report_folder / "fscan目标为空.txt"
@@ -1712,12 +1802,16 @@ async def run_security_scans(root, folder, report_folder):
         print(f"[+] fscan目标文件有效，包含 {target_count} 个IP目标")
         fscan_cmd = FSCAN_CMD_TEMPLATE.format(target_file=str(fscan_target_file), output_file=str(fscan_report))
         print(f"[*] 执行fscan扫描命令: {fscan_cmd}")
+        print(f"[*] 正在进行端口扫描，请稍候...")
         result = await run_cmd_async(fscan_cmd)
         if result is None:
             print(f"[!] fscan扫描失败，跳过")
             return
         else:
             print(f"[✓] fscan扫描完成，报告保存至: {fscan_report}")
+    
+    print(f"\n[安全扫描完成] 域名: {root}")
+    print(f"{'='*60}\n")
     await finalize_report_directory(report_folder, root)
 
 
@@ -1795,16 +1889,37 @@ def save_non_200_urls_by_domain(non_200_urls_all, url_root_map):
 def main():
     init_dirs()
     filter_domains = load_filter_domains(FILTER_DOMAIN_PATH)
+    
+    # 加载动态过滤域名并合并
+    if DYNAMIC_FILTER_FILE.exists():
+        dynamic_domains = load_filter_domains(str(DYNAMIC_FILTER_FILE))
+        filter_domains = filter_domains.union(dynamic_domains)
+    
+    # 加载过滤IP
+    filtered_ips = load_filter_ips(str(DYNAMIC_IP_FILTER_FILE))
+    
     cdn_ranges = load_cdn_ranges(CDN_LIST_PATH)
     existing_cdn_dyn_ips = {line.strip() for line in open(CDN_DYNAMIC_PATH, encoding="utf-8")} if os.path.exists(CDN_DYNAMIC_PATH) else set()
 
-    # 读取目标域名
+    # 解析命令行参数获取目标域名
     target_domain = None
-    target_file_path = "data/input/url"
-    if os.path.exists(target_file_path):
-        with open(target_file_path, "r", encoding="utf-8") as f:
-            target_domain = f.read().strip()
-        print(f"[*] 检测到目标域名: {target_domain}")
+    for i, arg in enumerate(sys.argv):
+        if arg == '-domain' and i + 1 < len(sys.argv):
+            target_domain = sys.argv[i + 1]
+            print(f"[*] 使用命令行指定的域名: {target_domain}")
+            break
+    
+    # 如果没有指定域名，从文件读取
+    if not target_domain:
+        target_file_path = "data/input/url"
+        if os.path.exists(target_file_path):
+            with open(target_file_path, "r", encoding="utf-8") as f:
+                target_domain = f.read().strip()
+            print(f"[*] 从文件读取目标域名: {target_domain}")
+    
+    if not target_domain:
+        print("[X] 未指定目标域名")
+        return
 
     # if not os.path.exists(RESULT_JSON_PATH):
     #     if '-test' in sys.argv:
@@ -1881,7 +1996,7 @@ def main():
     
     # 异步任务放到 asyncio.run 中执行
     try:
-        asyncio.run(run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains_all))
+        asyncio.run(run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains_all, filtered_ips))
     except Exception as e:
         print(f"[ERROR] 异步任务执行出错: {e}")
         import traceback
@@ -1906,10 +2021,31 @@ def main():
                 for dom in sorted(new_domains_to_write):
                     f.write(dom + "\n")
     
+    # 收集所有新增的过滤IP并去重写入
+    if new_filtered_ips:
+        # 读取现有的过滤IP
+        existing_ips = set()
+        if DYNAMIC_IP_FILTER_FILE.exists():
+            with open(DYNAMIC_IP_FILTER_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        existing_ips.add(line)
+        
+        # 只写入新增的IP
+        new_ips_to_write = new_filtered_ips - existing_ips
+        if new_ips_to_write:
+            print(f"[+] 写入 {len(new_ips_to_write)} 个新增动态过滤IP")
+            # 确保目录存在
+            DYNAMIC_IP_FILTER_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(DYNAMIC_IP_FILTER_FILE, "a", encoding="utf-8") as f:
+                for ip in sorted(new_ips_to_write):
+                    f.write(ip + "\n")
+    
     print("[✓] 程序执行完成", flush=True)
 
 
-async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None):
+async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains=None, filtered_ips=None):
     global SKIP_CURRENT_DOMAIN
     print("[*] 开始逐个执行域名流程...", flush=True)
     sorted_domains = sorted(domain_urls_map.keys(), key=natural_sort_key)
@@ -1927,7 +2063,7 @@ async def run_domain_tasks(domain_ip_map, domain_urls_map, domain_titles_map, cd
             urls = sorted(domain_urls_map.get(domain, []))
             print(f"[DEBUG] {domain} 有 {len(ips)} 个IP, {len(urls)} 个URL")
             titles = {u: domain_titles_map.get(u, ("", "", "", "", (), "", "", 0)) for u in urls}
-            await per_domain_flow_sync_async(domain, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains)
+            await per_domain_flow_sync_async(domain, ips, urls, titles, cdn_ranges, filter_domains, existing_cdn_dyn_ips, url_body_info_map, redirect_domains, filtered_ips)
         except asyncio.CancelledError:
             print(f"[!] 当前任务被取消: {domain}")
             continue

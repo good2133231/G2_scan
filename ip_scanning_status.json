@@ -1,0 +1,20 @@
+{
+  "77.37.74.88": {
+    "status": "扫描完成",
+    "start_time": "2025-09-02 06:40:17",
+    "target_ip": "77.37.74.88",
+    "scan_type": "port_scan",
+    "ports": "all",
+    "domain": "mt5crm.com",
+    "completed": true,
+    "progress": 100,
+    "open_ports": [],
+    "services": [],
+    "total_ports": 0,
+    "scanned_ports": 0,
+    "end_time": "2025-09-02 06:43:27",
+    "exit_code": 0,
+    "output": "🎯 开始IP端口扫描: 77.37.74.88\n📊 端口范围: all\n📁 输出目录: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88\n⏰ 开始时间: Tue Sep  2 06:40:17 UTC 2025\n🔍 fscan扫描配置:\n   目标IP: 77.37.74.88\n   端口范围: 全端口扫描 (1-65535)\n   fscan端口参数: -p all\n   超时时间: 1800s\n\n📡 步骤1: fscan端口扫描和服务识别\n执行命令: /opt/info_get/start_game_test/tools/scanner/fscan -hf /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/target_ip.txt -p all -np -nobr -t 1800 -o /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/fscan_result.txt\n========================================\n时间: Tue Sep  2 06:40:17 UTC 2025\n步骤: fscan端口扫描\n命令: /opt/info_get/start_game_test/tools/scanner/fscan -hf /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/target_ip.txt -p all -np -nobr -t 1800 -o /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/fscan_result.txt\n========================================\n\n   ___                              _    \n  / _ \\     ___  ___ _ __ __ _  ___| | __ \n / /_\\/____/ __|/ __| '__/ _` |/ __| |/ /\n/ /_\\\\_____\\__ \\ (__| | | (_| | (__|   <    \n\\____/     |___/\\___|_|  \\__,_|\\___|_|\\_\\   \n                     fscan version: 1.8.4\nstart infoscan\n77.37.74.88:21 open\n77.37.74.88:80 open\n[*] alive ports len is: 2\nstart vulscan\n[*] WebTitle http://77.37.74.88        code:200 len:638    title:Welcome to nginx!\n已完成 2/2\n[*] 扫描结束,耗时: 3m9.424425582s\n✅ fscan扫描完成\n\n📊 步骤2: 处理fscan扫描结果\n✅ fscan扫描结果: 3 行记录\n✅ 结果解析完成，发现 2 个开放端口\n📄 JSON结果保存到: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/fscan_result.json\n🔓 开放端口:\n   21/tcp - unknown\n   80/tcp - unknown\nℹ️ 未发现Web服务，跳过路径探测\n\n📋 步骤4: 生成扫描报告\n\n✅ IP端口扫描全部完成！\n📋 详细报告: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/scan_report.txt\n📊 JSON结果: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/fscan_result.json\n🔧 使用工具: fscan (专业端口扫描+Web路径探测)\n\n📄 扫描报告预览:\n==================\n🎯 IP端口扫描报告 (基于fscan)\n==================================\n目标IP: 77.37.74.88\n扫描时间: Tue Sep  2 06:43:27 UTC 2025\n扫描类型: 全端口扫描 (1-65535)\n工具: fscan\n\n📊 扫描摘要:\n   开放端口: 2 个\n   Web服务: 0 个\n   检测到的服务类型: 1 种\n\n🔓 开放端口详情:\n   21/tcp - unknown\n   80/tcp - unknown\n\n📁 输出文件:\n   - 扫描日志: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/scan.log\n   - fscan原始结果: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/fscan_result.txt\n   - JSON格式结果: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/fscan_result.json\n   - 扫描报告: /opt/info_get/start_game_test/output/ip_scans/77.37.74.88/scan_report.txt\n\n⏰ 扫描完成时间: Tue Sep  2 06:43:27 UTC 2025\n",
+    "error": ""
+  }
+}

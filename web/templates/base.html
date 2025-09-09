@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}渗透扫描平台{% endblock %}</title>
+    
+    <!-- CSS -->
+    <link href="https://unpkg.com/element-ui@2.15.9/lib/theme-chalk/index.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/main.css" rel="stylesheet">
+    
+    <!-- Vue & Element UI -->
+    <script src="https://unpkg.com/vue@2.7.0/dist/vue.min.js"></script>
+    <script src="https://unpkg.com/element-ui@2.15.9/lib/index.js"></script>
+    <script src="https://unpkg.com/axios@0.27.2/dist/axios.min.js"></script>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div id="app">
+        <!-- 顶部导航栏 -->
+        <el-header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-crosshairs"></i>
+                    <span>渗透扫描平台</span>
+                </div>
+                <el-menu mode="horizontal" :default-active="activeMenu" class="nav-menu" @select="handleMenuSelect">
+                    <el-menu-item index="dashboard">
+                        <i class="fas fa-dashboard"></i> 仪表盘
+                    </el-menu-item>
+                    <el-menu-item index="domains">
+                        <i class="fas fa-globe"></i> 域名资产
+                    </el-menu-item>
+                    <el-menu-item index="graph">
+                        <i class="fas fa-project-diagram"></i> 关系图谱
+                    </el-menu-item>
+                    <el-menu-item index="search">
+                        <i class="fas fa-search"></i> 搜索
+                    </el-menu-item>
+                </el-menu>
+            </div>
+        </el-header>
+        
+        <!-- 主内容区域 -->
+        <el-container class="main-container">
+            {% block content %}{% endblock %}
+        </el-container>
+    </div>
+    
+    <script>
+        // 全局Vue实例配置
+        Vue.prototype.$axios = axios;
+        
+        // 配置axios认证
+        // 从配置文件中读取认证信息（实际部署时应该通过服务器端安全方式提供）
+        const username = 'admin';
+        const password = 'MyStr0ngP@ssw0rd!';
+        const basicAuth = 'Basic ' + btoa(username + ':' + password);
+        
+        // 设置axios默认认证头
+        axios.defaults.headers.common['Authorization'] = basicAuth;
+        axios.defaults.withCredentials = true;
+        
+        // 响应拦截器：处理认证错误
+        axios.interceptors.response.use(
+            function (response) {
+                return response;
+            },
+            function (error) {
+                if (error.response && error.response.status === 401) {
+                    console.error('认证失败，可能是用户名或密码错误');
+                    // 在生产环境中，这里应该重定向到登录页面
+                    alert('认证失败，请检查用户名和密码');
+                }
+                return Promise.reject(error);
+            }
+        );
+        
+        // 基础Vue混入
+        const baseMixin = {
+            data() {
+                return {
+                    activeMenu: 'dashboard'
+                }
+            },
+            methods: {
+                handleMenuSelect(index) {
+                    if (index === 'dashboard') {
+                        window.location.href = '/';
+                    } else if (index === 'domains') {
+                        window.location.href = '/';
+                    } else if (index === 'graph') {
+                        window.location.href = '/graph';
+                    }
+                },
+                formatDate(date) {
+                    return new Date(date).toLocaleString('zh-CN');
+                }
+            }
+        };
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

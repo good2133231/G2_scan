@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}关系图谱 - 渗透扫描平台{% endblock %}
+
+{% block extra_head %}
+<script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<el-main>
+    <el-card>
+        <div slot="header" class="card-header">
+            <span><i class="fas fa-project-diagram"></i> 域名扩展关系图谱</span>
+            <el-button-group>
+                <el-button size="small" @click="resetGraph" icon="el-icon-refresh">重置</el-button>
+                <el-button size="small" @click="exportImage" icon="el-icon-download">导出图片</el-button>
+                <el-button size="small" @click="toggleLayout" icon="el-icon-s-operation">切换布局</el-button>
+                <el-button size="small" @click="toggleRelatedFilter" :type="filterRelated ? 'primary' : 'default'">
+                    <i class="el-icon-filter"></i> <span v-text="filterRelated ? '显示全部' : '仅相关域名'"></span>
+                </el-button>
+            </el-button-group>
+        </div>
+        
+        <!-- 统计信息 -->
+        <el-row :gutter="20" style="margin-bottom: 20px;">
+            <el-col :span="6">
+                <el-card shadow="never" class="stat-card-mini">
+                    <div class="stat-value">[[ statistics.totalDomains ]]</div>
+                    <div class="stat-label">扫描域名</div>
+                </el-card>
+            </el-col>
+            <el-col :span="6">
+                <el-card shadow="never" class="stat-card-mini">
+                    <div class="stat-value">[[ statistics.totalExpanded ]]</div>
+                    <div class="stat-label">扩展域名</div>
+                </el-card>
+            </el-col>
+            <el-col :span="6">
+                <el-card shadow="never" class="stat-card-mini">
+                    <div class="stat-value">[[ statistics.totalMethods ]]</div>
+                    <div class="stat-label">扩展方法</div>
+                </el-card>
+            </el-col>
+            <el-col :span="6">
+                <el-card shadow="never" class="stat-card-mini">
+                    <div class="stat-value">[[ statistics.totalRelations ]]</div>
+                    <div class="stat-label">关系总数</div>
+                </el-card>
+            </el-col>
+        </el-row>
+        
+        <div id="graph-container"></div>
+        
+        <!-- 图例和扩展方法说明 -->
+        <div style="margin-top: 20px;">
+            <el-tabs type="border-card">
+                <el-tab-pane label="节点图例">
+                    <el-row :gutter="20">
+                        <el-col :span="8">
+                            <div style="display: flex; align-items: center;">
+                                <div style="width: 35px; height: 35px; background: #3498db; border-radius: 50%; margin-right: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); border: 4px solid #ffffff;"></div>
+                                <span style="font-weight: bold; color: #2c3e50;">主域名（扫描目标）</span>
+                            </div>
+                        </el-col>
+                        <el-col :span="8">
+                            <div style="display: flex; align-items: center;">
+                                <div style="width: 30px; height: 30px; background: #27ae60; border-radius: 50%; margin-right: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); border: 3px solid #ffffff;"></div>
+                                <span style="font-weight: bold; color: #2c3e50;">扩展发现的域名</span>
+                            </div>
+                        </el-col>
+                        <el-col :span="8">
+                            <div style="display: flex; align-items: center;">
+                                <div style="width: 25px; height: 25px; background: #95a5a6; border-radius: 50%; margin-right: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); border: 2px solid #ffffff;"></div>
+                                <span style="font-weight: bold; color: #2c3e50;">二级扩展域名</span>
+                            </div>
+                        </el-col>
+                    </el-row>
+                </el-tab-pane>
+                <el-tab-pane label="扩展方法">
+                    <el-table :data="methodStats" size="mini" style="width: 100%">
+                        <el-table-column prop="method" label="扩展方法" width="150">
+                            <template slot-scope="scope">
+                                <el-tag :color="scope.row.color" size="mini" style="color: white;">
+                                    [[ scope.row.icon ]] [[ scope.row.method ]]
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="description" label="说明"></el-table-column>
+                        <el-table-column prop="count" label="发现数量" width="100" align="center">
+                            <template slot-scope="scope">
+                                <el-tag type="info" size="mini">[[ scope.row.count ]]</el-tag>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </el-tab-pane>
+            </el-tabs>
+        </div>
+    </el-card>
+</el-main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+new Vue({
+    el: '#app',
+    mixins: [baseMixin],
+    delimiters: ['[[', ']]'],
+    data() {
+        return {
+            network: null,
+            loading: true,
+            statistics: {
+                totalDomains: 0,
+                totalExpanded: 0,
+                totalMethods: 0,
+                totalRelations: 0
+            },
+            methodStats: [],
+            currentLayout: 'hierarchical',
+            filterRelated: false
+        }
+    },
+    mounted() {
+        this.activeMenu = 'graph';
+        this.initGraph();
+        this.loadGraphData();
+    },
+    methods: {
+        initGraph() {
+            const container = document.getElementById('graph-container');
+            container.style.height = '700px';
+            container.style.background = 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)';
+            
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 35,
+                    font: {
+                        size: 13,
+                        color: '#ffffff',
+                        face: 'Microsoft YaHei, Arial',
+                        bold: true,
+                        strokeWidth: 2,
+                        strokeColor: '#2c3e50'
+                    },
+                    borderWidth: 4,
+                    borderWidthSelected: 6,
+                    shadow: {
+                        enabled: true,
+                        color: 'rgba(0,0,0,0.2)',
+                        size: 10,
+                        x: 3,
+                        y: 3
+                    },
+                    scaling: {
+                        min: 25,
+                        max: 60,
+                        label: {
+                            enabled: true,
+                            min: 12,
+                            max: 16,
+                            maxVisible: 20,
+                            drawThreshold: 8
+                        }
+                    },
+                    chosen: {
+                        node: function(values, id, selected, hovering) {
+                            values.shadow = true;
+                            values.shadowColor = 'rgba(52, 152, 219, 0.8)';
+                            values.shadowSize = 18;
+                            values.borderWidth = 6;
+                        }
+                    }
+                },
+                edges: {
+                    width: 2,
+                    color: { 
+                        color: '#95a5a6',
+                        highlight: '#3498db',
+                        hover: '#e74c3c',
+                        inherit: 'from',
+                        opacity: 0.8
+                    },
+                    arrows: {
+                        to: { 
+                            enabled: true, 
+                            scaleFactor: 1.2,
+                            type: 'arrow'
+                        }
+                    },
+                    smooth: {
+                        type: 'dynamic',
+                        roundness: 0.3,
+                        forceDirection: 'none'
+                    },
+                    font: {
+                        size: 10,
+                        align: 'middle',
+                        background: 'rgba(255,255,255,0.85)',
+                        strokeWidth: 2,
+                        strokeColor: '#ffffff',
+                        color: '#2c3e50'
+                    },
+                    shadow: {
+                        enabled: true,
+                        color: 'rgba(0,0,0,0.15)',
+                        size: 6,
+                        x: 2,
+                        y: 2
+                    },
+                    hoverWidth: 4,
+                    selectionWidth: 5
+                },
+                layout: {
+                    hierarchical: {
+                        enabled: true,
+                        levelSeparation: 250,
+                        nodeSpacing: 180,
+                        treeSpacing: 200,
+                        direction: 'LR',
+                        sortMethod: 'directed',
+                        shakeTowards: 'roots',
+                        parentCentralization: true,
+                        edgeMinimization: true,
+                        blockShifting: true
+                    }
+                },
+                physics: {
+                    enabled: false
+                },
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 200,
+                    hideEdgesOnDrag: false,
+                    navigationButtons: true,
+                    keyboard: true,
+                    selectConnectedEdges: true,
+                    hoverConnectedEdges: true,
+                    multiselect: true,
+                    dragNodes: true,
+                    dragView: true,
+                    zoomView: true
+                }
+            };
+            
+            this.network = new vis.Network(container, { nodes: [], edges: [] }, options);
+            
+            // 点击事件
+            this.network.on('click', (params) => {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    // 判断是否是域名
+                    if (nodeId.includes('.') && !nodeId.match(/^\d+\.\d+\.\d+\.\d+/)) {
+                        window.location.href = `/domain/${nodeId}`;
+                    }
+                }
+            });
+        },
+        
+        async loadGraphData() {
+            this.loading = true;
+            try {
+                const url = this.filterRelated ? '/api/graph/data?filter_related=true' : '/api/graph/data';
+                const response = await this.$axios.get(url);
+                const data = response.data.data;
+                
+                // 统计信息
+                const mainDomains = new Set();
+                const expandedDomains = new Set();
+                const methods = {};
+                const methodInfo = data.discovery_methods || {};
+                
+                // 处理节点 - 使用统一配色方案
+                const nodes = data.nodes.map(node => {
+                    let color = '#27ae60';  // var(--success-color)
+                    let size = 25;
+                    
+                    if (node.group === 'main') {
+                        color = '#3498db';   // var(--primary-color)
+                        size = 35;
+                        mainDomains.add(node.id);
+                    } else if (node.group === 'discovered') {
+                        expandedDomains.add(node.id);
+                        // 根据发现深度调整颜色
+                        if (node.level === 2) {
+                            color = '#95a5a6';  // var(--info-color)
+                            size = 20;
+                        }
+                    }
+                    
+                    return {
+                        ...node,
+                        size: size,
+                        title: `${node.label}\n点击查看详情`,
+                        color: {
+                            background: color,
+                            border: color,
+                            highlight: {
+                                background: color,
+                                border: '#2c3e50'
+                            }
+                        }
+                    };
+                });
+                
+                // 处理边并统计扩展方法
+                const edges = data.edges.map(edge => {
+                    // 统计方法使用次数
+                    methods[edge.label] = (methods[edge.label] || 0) + 1;
+                    
+                    // 根据方法类型设置边的颜色
+                    let edgeColor = '#848484';
+                    if (edge.label === 'FOFA搜索') {
+                        edgeColor = '#3498db';
+                    } else if (edge.label === 'IP反查') {
+                        edgeColor = '#e74c3c';
+                    } else if (edge.label === '页面内容') {
+                        edgeColor = '#9b59b6';
+                    } else if (edge.label === 'Hunter搜索') {
+                        edgeColor = '#2ecc71';
+                    }
+                    
+                    return {
+                        ...edge,
+                        label: edge.label,
+                        title: edge.title || edge.details,
+                        color: {
+                            color: edgeColor,
+                            highlight: edgeColor,
+                            hover: edgeColor
+                        },
+                        width: 2
+                    };
+                });
+                
+                // 更新统计信息
+                this.statistics = {
+                    totalDomains: mainDomains.size,
+                    totalExpanded: expandedDomains.size,
+                    totalMethods: Object.keys(methods).length,
+                    totalRelations: edges.length
+                };
+                
+                // 更新方法统计
+                this.methodStats = Object.entries(methods).map(([method, count]) => {
+                    const info = methodInfo[method] || {};
+                    return {
+                        method: method,
+                        count: count,
+                        description: info.description || '通过该方法发现域名',
+                        icon: info.icon || '🔍',
+                        color: info.color || '#95a5a6'
+                    };
+                }).sort((a, b) => b.count - a.count);
+                
+                // 更新图形
+                this.network.setData({
+                    nodes: new vis.DataSet(nodes),
+                    edges: new vis.DataSet(edges)
+                });
+                
+                // 自动调整视图
+                setTimeout(() => {
+                    this.network.fit();
+                }, 100);
+                
+            } catch (error) {
+                this.$message.error('加载图谱数据失败');
+                console.error(error);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        resetGraph() {
+            this.network.fit();
+        },
+        
+        exportImage() {
+            const canvas = this.network.canvas.frame.canvas;
+            const link = document.createElement('a');
+            link.download = `domain-expansion-graph-${new Date().toISOString().slice(0,10)}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        },
+        
+        toggleRelatedFilter() {
+            this.filterRelated = !this.filterRelated;
+            this.loadGraphData();
+        },
+        
+        toggleLayout() {
+            if (this.currentLayout === 'hierarchical') {
+                // 切换到力导向布局
+                this.currentLayout = 'force';
+                this.network.setOptions({
+                    layout: {
+                        hierarchical: false
+                    },
+                    physics: {
+                        enabled: true,
+                        solver: 'forceAtlas2Based',
+                        forceAtlas2Based: {
+                            gravitationalConstant: -50,
+                            centralGravity: 0.01,
+                            springLength: 200,
+                            springConstant: 0.08
+                        }
+                    }
+                });
+                this.$message.success('已切换到力导向布局');
+            } else {
+                // 切换回层次布局
+                this.currentLayout = 'hierarchical';
+                this.network.setOptions({
+                    layout: {
+                        hierarchical: {
+                            enabled: true,
+                            levelSeparation: 250,
+                            nodeSpacing: 200,
+                            treeSpacing: 300,
+                            direction: 'LR',
+                            sortMethod: 'directed'
+                        }
+                    },
+                    physics: {
+                        enabled: false
+                    }
+                });
+                this.$message.success('已切换到层次布局');
+            }
+            
+            // 重新调整视图
+            setTimeout(() => {
+                this.network.fit();
+            }, 500);
+        }
+    }
+});
+</script>
+{% endblock %}

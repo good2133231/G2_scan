@@ -1,0 +1,3658 @@
+{% extends "base.html" %}
+
+{% block title %}{{ domain }} - 渗透扫描平台{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* 🎨 设计美术大师的专业级柔和配色方案 - 降低亮度，协调舒适 */
+    :root {
+        /* 柔和专业渐变色 - 降低饱和度和亮度 */
+        --primary-gradient: linear-gradient(135deg, #6c7b8a 0%, #8892a0 100%);
+        --secondary-gradient: linear-gradient(135deg, #9bb5c4 0%, #a8bcc8 100%);
+        --success-gradient: linear-gradient(135deg, #7fb069 0%, #8bc86a 100%);
+        --warning-gradient: linear-gradient(135deg, #e6a24c 0%, #ddb868 100%);
+        --danger-gradient: linear-gradient(135deg, #d97066 0%, #e88b7d 100%);
+        --info-gradient: linear-gradient(135deg, #64a3c7 0%, #7bb3d3 100%);
+        
+        /* 柔和阴影系统 */
+        --card-shadow: 0 4px 16px rgba(108, 123, 138, 0.08);
+        --hover-shadow: 0 6px 24px rgba(108, 123, 138, 0.12);
+        --text-primary: #334155;
+        --text-secondary: #64748b;
+        --text-muted: #94a3b8;
+        
+        /* 舒适背景色 */
+        --bg-primary: #fefefe;
+        --bg-card: #f8fafb;
+        --bg-soft: #f1f5f9;
+        --bg-hover: #e2e8f0;
+        
+        /* 协调边框色 */
+        --border-subtle: #e2e8f0;
+        --border-accent: #cbd5e0;
+        --border-soft: #f1f5f9;
+        
+        /* 专业色调 */
+        --accent-blue: #64a3c7;
+        --accent-green: #7fb069;
+        --accent-orange: #e6a24c;
+        --accent-gray: #8892a0;
+    }
+
+    .layer-content {
+        animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        background: linear-gradient(135deg, #ffffff 0%, var(--bg-card) 100%);
+        border-radius: 12px;
+        padding: 28px;
+        margin: 20px 0;
+        box-shadow: 0 4px 16px rgba(108, 123, 138, 0.08);
+        border: 1px solid var(--border-subtle);
+    }
+    
+    @keyframes fadeInUp {
+        from { 
+            opacity: 0; 
+            transform: translateY(20px); 
+        }
+        to { 
+            opacity: 1; 
+            transform: translateY(0); 
+        }
+    }
+    
+    /* 🎯 现代化扫描状态样式 */
+    .status-item {
+        text-align: center;
+        padding: 16px 12px;
+        background: var(--bg-card);
+        border-radius: 12px;
+        border: 1px solid var(--border-subtle);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .status-item:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--hover-shadow);
+        border-color: var(--border-accent);
+    }
+    
+    .status-label {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-value {
+        font-size: 18px;
+        color: var(--text-primary);
+        font-weight: 700;
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    /* 🚀 现代化扫描阶段样式 */
+    .stage-item {
+        padding: 20px 0;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--bg-card);
+        border-radius: 12px;
+        margin-bottom: 12px;
+        padding: 20px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .stage-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+    
+    .stage-item:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--card-shadow);
+    }
+    
+    .stage-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .stage-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .stage-name i {
+        margin-right: 12px;
+        background: var(--success-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .stage-progress-bar {
+        margin: 15px 0;
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--border-subtle);
+    }
+    
+    .stage-info {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-top: 12px;
+        font-weight: 500;
+    }
+    
+    .stage-time {
+        margin-right: 20px;
+        padding: 4px 12px;
+        background: var(--info-gradient);
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .stage-details {
+        color: var(--text-secondary);
+        font-style: italic;
+    }
+    
+    /* 🔥 柔和错误项样式 */
+    .error-item {
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        color: var(--accent-orange);
+        font-size: 14px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        border-left: 3px solid var(--accent-orange);
+        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--card-shadow);
+    }
+    
+    .error-item:hover {
+        transform: translateX(2px);
+        box-shadow: var(--hover-shadow);
+        background: linear-gradient(135deg, #fef7ed 0%, #fed7aa 100%);
+    }
+    
+    .error-item i {
+        margin-right: 8px;
+        font-size: 16px;
+    }
+    
+    /* 🌟 现代化链接样式 - 科技美学 */
+    .url-link {
+        background: var(--success-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-decoration: none;
+        font-weight: 600;
+        position: relative;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .url-link::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: var(--success-gradient);
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .url-link:hover::after {
+        width: 100%;
+    }
+    
+    /* 🎯 IP地址现代化样式 */
+    .ip-address-text {
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+        font-family: 'Monaco', 'Consolas', monospace;
+        letter-spacing: 0.5px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* 🌐 域名现代化样式 */
+    .domain-text {
+        background: var(--warning-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 600;
+        font-family: 'Inter', '-apple-system', sans-serif;
+        letter-spacing: 0.3px;
+    }
+    
+    /* 🎨 简洁扩展域名网格 - 保持分组 */
+    .expand-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+        padding: 8px;
+    }
+    
+    .expand-item {
+        padding: 14px 18px !important;
+        font-size: 14px !important;
+        border: 1px solid var(--border-subtle) !important;
+        border-radius: 8px !important;
+        background: rgba(255, 255, 255, 0.7) !important;
+        backdrop-filter: blur(8px) !important;
+        box-shadow: 0 1px 4px rgba(108, 123, 138, 0.08) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        min-height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        overflow: visible !important;
+        position: relative !important;
+        margin-bottom: 6px !important;
+    }
+    
+    .expand-item:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(108, 123, 138, 0.08) !important;
+        border-color: var(--accent-blue) !important;
+        white-space: normal !important;
+        text-overflow: unset !important;
+        word-break: break-all !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* 🎯 简洁Section标题样式 - 保持醒目 */
+    .section-title {
+        background: linear-gradient(135deg, #ffffff 0%, var(--bg-card) 100%);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin: 24px 0 16px 0;
+        box-shadow: 0 2px 8px rgba(108, 123, 138, 0.08);
+        border: 1px solid var(--border-subtle);
+        border-left: 4px solid var(--accent-blue);
+        font-size: 16px;
+        font-weight: 650;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .section-title::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+    
+    .section-title:hover::after {
+        left: 100%;
+    }
+    
+    .section-title:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(108, 123, 138, 0.18), 0 3px 8px rgba(0, 0, 0, 0.12);
+        border-left-color: var(--accent-green);
+    }
+    
+    .section-title i {
+        font-size: 22px;
+        margin-right: 16px;
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    }
+    
+    /* 🌟 简洁子标题样式 - 保持区分 */
+    .sub-section-title {
+        background: linear-gradient(135deg, var(--bg-soft) 0%, #f8fafb 100%);
+        padding: 10px 16px;
+        border-radius: 8px;
+        margin: 16px 0 12px 0;
+        border-left: 3px solid var(--accent-green);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        box-shadow: 0 1px 4px rgba(108, 123, 138, 0.06);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .sub-section-title:hover {
+        transform: translateX(2px);
+        border-left-color: var(--accent-blue);
+        box-shadow: 0 2px 8px rgba(108, 123, 138, 0.08);
+    }
+    
+    .sub-section-title i {
+        margin-right: 8px;
+        background: var(--success-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    /* 🎨 透明数据section样式 - 避免双层白框 */
+    .data-section {
+        background: transparent;
+        border-radius: 8px;
+        padding: 16px 0;
+        margin: 20px 0;
+        border-left: 3px solid var(--border-subtle);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .data-section:hover {
+        border-left-color: var(--accent-blue);
+        transform: translateX(2px);
+    }
+    
+    .expand-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* 日志样式 */
+    .log-line {
+        line-height: 1.4;
+        border-left: 3px solid transparent;
+        padding-left: 5px;
+        transition: all 0.2s;
+    }
+    
+    .log-line:hover {
+        background-color: #2a2a2a;
+        border-left-color: #409EFF;
+    }
+    
+    .error-log {
+        color: #ff6b6b !important;
+        border-left-color: #ff6b6b;
+        background-color: rgba(255, 107, 107, 0.1);
+    }
+    
+    .warning-log {
+        color: #ffd93d !important;
+        border-left-color: #ffd93d;
+        background-color: rgba(255, 217, 61, 0.1);
+    }
+    
+    .success-log {
+        color: #6bcf7f !important;
+        border-left-color: #6bcf7f;
+        background-color: rgba(107, 207, 127, 0.1);
+    }
+    
+    .info-log {
+        color: #d4d4d4;
+        border-left-color: transparent;
+    }
+    
+    .log-container {
+        scrollbar-width: thin;
+        scrollbar-color: #666 #2a2a2a;
+    }
+    
+    .log-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .log-container::-webkit-scrollbar-track {
+        background: #2a2a2a;
+        border-radius: 4px;
+    }
+    
+    .log-container::-webkit-scrollbar-thumb {
+        background: #666;
+        border-radius: 4px;
+    }
+    
+    .log-container::-webkit-scrollbar-thumb:hover {
+        background: #888;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<el-main>
+    <div class="domain-header">
+        <h1><i class="fas fa-globe"></i> [[ domainData.domain ]]</h1>
+        <div class="domain-meta">
+            <span><i class="fas fa-layer-group"></i> [[ Object.keys(domainData.layers).length ]] 层扫描</span>
+            <span><i class="fas fa-clock"></i> [[ formatDate(new Date()) ]]</span>
+        </div>
+    </div>
+    
+    <!-- 快速统计 -->
+    <el-row :gutter="20" class="stats-row">
+        <el-col :span="4">
+            <el-card class="stat-card clickable-card" :class="{ active: activeFilter === null }" @click="filterContent('all')">
+                <div class="stat-icon" style="background: #13C2C2;">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ Object.keys(domainData.layers).length ]]</div>
+                    <div class="stat-label">显示全部</div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="4">
+            <el-card class="stat-card clickable-card" :class="{ active: activeFilter === 'urls' }" @click="filterContent('urls')">
+                <div class="stat-icon" style="background: #409EFF;">
+                    <i class="fas fa-link"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ totalUrls ]]</div>
+                    <div class="stat-label">发现URL</div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="4">
+            <el-card class="stat-card clickable-card" :class="{ active: activeFilter === 'ports' }" @click="filterContent('ports')">
+                <div class="stat-icon" style="background: #E6A23C;">
+                    <i class="fas fa-network-wired"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ totalIps ]]</div>
+                    <div class="stat-label">IP/端口</div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="4">
+            <el-card class="stat-card clickable-card" :class="{ active: activeFilter === 'domains' }" @click="filterContent('domains')">
+                <div class="stat-icon" style="background: #67C23A;">
+                    <i class="fas fa-sitemap"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ totalDomains ]]</div>
+                    <div class="stat-label">扩展域名</div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="4">
+            <el-card class="stat-card clickable-card" :class="{ active: activeFilter === 'vulns' }" @click="filterContent('vulns')">
+                <div class="stat-icon" style="background: #F56C6C;">
+                    <i class="fas fa-bug"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">[[ totalVulns ]]</div>
+                    <div class="stat-label">漏洞数量</div>
+                </div>
+            </el-card>
+        </el-col>
+    </el-row>
+    
+    <!-- 过滤提示 -->
+    <div style="text-align: center; margin-bottom: 15px;">
+        <el-tag size="mini" type="info" effect="plain">
+            <i class="fas fa-info-circle"></i>
+            点击上方统计卡片可过滤显示对应内容
+        </el-tag>
+        <span style="margin-left: 15px; font-size: 12px; color: #999;">
+            当前模式: [[ activeFilter ? activeFilter + ' 过滤模式' : '显示全部' ]]
+        </span>
+    </div>
+    
+    <!-- 标签页 -->
+    <el-tabs v-model="activeTab" class="layer-tabs">
+        <el-tab-pane label="扫描结果" name="scan">
+            <!-- 层级切换 -->
+            <el-radio-group v-model="currentLayer" style="margin-bottom: 20px;">
+                <el-radio-button v-for="layer in Object.keys(domainData.layers)" :key="layer" :label="layer">
+                    第[[ layer ]]层
+                </el-radio-button>
+            </el-radio-group>
+            
+            <div class="layer-content" v-if="currentLayerData">
+                <!-- URLs -->
+                <div class="data-section" v-if="((currentLayerData.urls && currentLayerData.urls.length) || (currentLayerData.expand_scanned_urls && currentLayerData.expand_scanned_urls.length)) && (activeFilter === null || activeFilter === 'urls')">
+                    <div class="section-title">
+                        <i class="fas fa-link" style="background: var(--success-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                        发现的URLs
+                    </div>
+                    
+                    <!-- 基础发现的URL -->
+                    <div v-if="currentLayerData.urls && currentLayerData.urls.length" style="margin-bottom: 30px;">
+                        <div class="sub-section-title">
+                            <i class="fas fa-search" style="color: #606266; margin-right: 5px;"></i>
+                            基础扫描发现 ([[ currentLayerData.urls.length ]])
+                        </div>
+                        <el-table :data="paginatedUrls" 
+                                  style="width: 100%"
+                                  stripe>
+                            <el-table-column prop="url" label="URL" min-width="300">
+                                <template slot-scope="scope">
+                                    <a :href="scope.row.url || scope.row" target="_blank" class="url-link">
+                                        [[ scope.row.url || scope.row ]]
+                                    </a>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="title" label="标题" min-width="200">
+                                <template slot-scope="scope">
+                                    <span>[[ scope.row.title || '无标题' ]]</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="size" label="大小" width="100">
+                                <template slot-scope="scope">
+                                    <span>[[ formatSize(scope.row.size || 0) ]]</span>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <el-pagination
+                            v-if="currentLayerData.urls.length > urlPageSize"
+                            @current-change="handleUrlPageChange"
+                            :current-page="urlCurrentPage"
+                            :page-size="urlPageSize"
+                            :page-sizes="[10, 20, 50, 100]"
+                            @size-change="handleUrlSizeChange"
+                            layout="total, sizes, prev, pager, next, jumper"
+                            :total="currentLayerData.urls.length"
+                            style="margin-top: 15px; text-align: center;">
+                        </el-pagination>
+                    </div>
+                    
+                    <!-- 扩展发现的URL -->
+                    <div v-if="currentLayerData.expand_scanned_urls && currentLayerData.expand_scanned_urls.length">
+                        <div class="sub-section-title">
+                            <i class="fas fa-expand-arrows-alt" style="color: #606266; margin-right: 5px;"></i>
+                            扩展发现的URL ([[ currentLayerData.expand_scanned_urls.length ]])
+                        </div>
+                        <el-table :data="paginatedExpandUrls" 
+                                  style="width: 100%"
+                                  stripe>
+                            <el-table-column prop="url" label="URL" min-width="300">
+                                <template slot-scope="scope">
+                                    <a :href="scope.row.url" target="_blank" class="url-link">
+                                        [[ scope.row.url ]]
+                                    </a>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="title" label="标题" min-width="200">
+                                <template slot-scope="scope">
+                                    <span>[[ scope.row.title || '无标题' ]]</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="size" label="大小" width="100">
+                                <template slot-scope="scope">
+                                    <span>[[ formatSize(scope.row.size || 0) ]]</span>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <el-pagination
+                            v-if="currentLayerData.expand_scanned_urls && currentLayerData.expand_scanned_urls.length > expandUrlPageSize"
+                            @current-change="handleExpandUrlPageChange"
+                            :current-page="expandUrlCurrentPage"
+                            :page-size="expandUrlPageSize"
+                            :page-sizes="[10, 20, 50, 100]"
+                            @size-change="handleExpandUrlSizeChange"
+                            layout="total, sizes, prev, pager, next, jumper"
+                            :total="currentLayerData.expand_scanned_urls.length"
+                            style="margin-top: 15px; text-align: center;">
+                        </el-pagination>
+                    </div>
+                </div>
+                
+                <!-- IPs -->
+                <div class="data-section" v-if="currentLayerData.ips && currentLayerData.ips.length && (activeFilter === null || activeFilter === 'ports')">
+                    <div class="section-title">
+                        <i class="fas fa-network-wired" style="background: var(--warning-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                        IP地址 ([[ currentLayerData.ips.length ]])
+                    </div>
+                    <div class="item-list">
+                        <div class="item-tag" v-for="ip in currentLayerData.ips" :key="ip">
+                            [[ ip ]]
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 扩展信息 -->
+                <div class="data-section" v-if="((currentLayerData.expand_domains && currentLayerData.expand_domains.length) || (rawDataFiles.fofa_data && rawDataFiles.fofa_data.length) || (rawDataFiles.url_body_info && rawDataFiles.url_body_info.length) || (currentLayerData.expand_urls && currentLayerData.expand_urls.length)) && (activeFilter === null || activeFilter === 'domains')">
+                    <div class="section-title">
+                        <i class="fas fa-sitemap" style="background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                        扩展资产发现 - 攻击面分析
+                    </div>
+                    
+                    <!-- 基础扩展域名 -->
+                    <div v-if="currentLayerData.expand_domains && currentLayerData.expand_domains.length" style="margin-bottom: 20px;">
+                        <div class="sub-section-title">
+                            <i class="fas fa-globe" style="color: #606266; margin-right: 5px;"></i>
+                            基础扩展域名 ([[ currentLayerData.expand_domains.length ]])
+                            <el-tag size="mini" type="info" style="margin-left: 10px;">高价值目标</el-tag>
+                        </div>
+                        <div class="expand-grid">
+                            <el-tag v-for="domain in currentLayerData.expand_domains" :key="domain" 
+                                    :type="getExpandDomainType(domain)" 
+                                    size="medium" 
+                                    class="expand-item"
+                                    :style="getExpandDomainStyle(domain)"
+                                    @click="handleExpandDomainClick(domain)">
+                                <span class="domain-text" style="margin-right: 5px; flex: 1; word-break: break-all; white-space: normal;">[[ domain ]]</span>
+                                <i v-if="expandDomainStatus[domain] === 'completed'" 
+                                   class="el-icon-check" style="color: #67C23A; margin-left: 5px;"
+                                   title="已扫描，点击查看"></i>
+                                <i v-else-if="expandDomainStatus[domain] === 'scanning'" 
+                                   class="el-icon-loading" style="margin-left: 5px;"
+                                   title="扫描中，点击查看状态"></i>
+                                <el-button v-else 
+                                          type="text" size="mini" @click.stop="scanExpandDomain(domain)" 
+                                          style="padding: 0; margin-left: 5px;" title="扫描此域名">
+                                    <i class="el-icon-search"></i>
+                                </el-button>
+                            </el-tag>
+                        </div>
+                    </div>
+                    
+                    <!-- FOFA扩展发现 -->
+                    <div v-if="rawDataFiles.fofa_data && rawDataFiles.fofa_data.length" style="margin-bottom: 20px;">
+                        <div class="sub-section-title">
+                            <i class="fas fa-search-plus" style="color: #606266; margin-right: 5px;"></i>
+                            FOFA空间引擎发现 ([[ validFofaTotalCount ]])
+                            <el-tag size="mini" type="info" style="margin-left: 10px;">网络空间情报</el-tag>
+                        </div>
+                        <div v-if="validFofaDomains.length > 0">
+                            <div v-for="(fofa, index) in validFofaData" :key="index" style="margin-bottom: 15px;">
+                            <div style="margin-bottom: 10px; font-size: 12px; color: #666;">
+                                <i class="fas fa-fingerprint" style="margin-right: 5px;"></i>
+                                指纹特征: [[ fofa.file_name ]]
+                            </div>
+                            <div class="expand-grid">
+                                <el-tag v-for="(item, i) in fofa.domains" :key="i"
+                                        type="warning" 
+                                        size="medium" 
+                                        class="expand-item"
+                                        style="cursor: pointer; border-style: dashed;"
+                                        @click="handleFofaDomainClick(item)">
+                                    <span class="domain-text" style="margin-right: 5px; flex: 1; word-break: break-all; white-space: normal;">
+                                        [[ item.url || item ]]
+                                    </span>
+                                    <div style="display: flex; gap: 5px;">
+                                        <el-button type="text" size="mini" @click.stop="scanDomain(extractDomain(item.url || item))" 
+                                                   style="padding: 0;" title="扫描此域名">
+                                            <i class="el-icon-search" style="color: #E6A23C;"></i>
+                                        </el-button>
+                                        <el-button type="text" size="mini" @click.stop="openUrl(item.url || item)" 
+                                                   style="padding: 0;" title="打开链接">
+                                            <i class="el-icon-link" style="color: #409EFF;"></i>
+                                        </el-button>
+                                        <el-button type="text" size="mini" @click.stop="addToBlacklist(extractDomain(item.url || item))" 
+                                                   style="padding: 0;" title="加入黑名单">
+                                            <i class="el-icon-remove-outline" style="color: #F56C6C;"></i>
+                                        </el-button>
+                                    </div>
+                                </el-tag>
+                            </div>
+                        </div>
+                        <div v-else style="text-align: center; padding: 20px; color: #999;">
+                            <i class="fas fa-info-circle"></i> 暂无FOFA发现的域名，或已被黑名单过滤
+                        </div>
+                    </div>
+                    
+                    <!-- URL Body发现 - 始终显示这个区域 -->
+                    <div style="margin-bottom: 20px;">
+                        <div class="sub-section-title">
+                            <i class="fas fa-code" style="color: #606266; margin-right: 5px;"></i>
+                            页面内容挖掘发现 ([[ validContentMiningCount ]])
+                            <el-tag size="mini" type="info" style="margin-left: 10px;">内容分析</el-tag>
+                        </div>
+                        <div v-if="validContentMiningDomains.length > 0">
+                            <div class="expand-grid">
+                                <el-tag v-for="(item, index) in validContentMiningDomains" :key="index"
+                                        type="danger" 
+                                        size="medium" 
+                                        class="expand-item"
+                                        style="cursor: pointer; border-style: dotted;"
+                                        @click="openUrl(item.source)">
+                                    <span class="domain-text" style="margin-right: 5px; flex: 1; word-break: break-all; white-space: normal;">
+                                        [[ item.domain ]]
+                                    </span>
+                                    <div style="display: flex; gap: 5px;">
+                                        <el-button type="text" size="mini" @click.stop="scanDomain(item.domain)" 
+                                                   style="padding: 0;" title="扫描此域名">
+                                            <i class="el-icon-search" style="color: #F56C6C;"></i>
+                                        </el-button>
+                                        <el-button type="text" size="mini" @click.stop="openUrl(item.source)" 
+                                                   style="padding: 0;" title="查看来源页面">
+                                            <i class="el-icon-document" style="color: #909399;"></i>
+                                        </el-button>
+                                        <el-button type="text" size="mini" @click.stop="addToBlacklist(item.domain)" 
+                                                   style="padding: 0;" title="加入黑名单">
+                                            <i class="el-icon-remove-outline" style="color: #F56C6C;"></i>
+                                        </el-button>
+                                    </div>
+                                </el-tag>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 12px; color: #909399;">
+                                <i class="fas fa-info-circle"></i>
+                                这些域名是从目标页面的HTML、JavaScript等内容中提取发现的，可能包含内部系统、API端点等高价值目标
+                            </div>
+                        </div>
+                        <div v-else style="text-align: center; padding: 20px; color: #999;">
+                            <i class="fas fa-info-circle"></i> 暂无页面内容挖掘发现的域名，或已被黑名单过滤
+                        </div>
+                        
+                        <!-- 🎯 IP地址独立处理区域 - 系统构建大师架构 -->
+                        <!-- 🎯 修复：IP显示仅在显示全部或扩展域名过滤时显示，ports过滤时整合显示 -->
+                        <div v-if="discoveredIpAddresses.length > 0 && (activeFilter === null || activeFilter === 'domains')" style="margin-top: 25px;">
+                            <div class="sub-section-title">
+                                <i class="fas fa-server" style="color: #606266; margin-right: 5px;"></i>
+                                拓展IP地址目标发现 ([[ discoveredIpAddresses.length ]])
+                                <el-tag size="mini" type="primary" style="margin-left: 10px;">端口扫描</el-tag>
+                            </div>
+                            <div class="expand-grid" style="border: 2px solid var(--accent-blue); padding: 15px; border-radius: 10px; background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-soft) 100%); box-shadow: var(--card-shadow);">
+                                <el-tag v-for="ipAddress in discoveredIpAddresses" :key="ipAddress"
+                                        type="primary" 
+                                        size="medium" 
+                                        class="expand-item"
+                                        style="background: var(--bg-soft); border-color: var(--accent-blue); color: var(--accent-blue);">
+                                    <span style="margin-right: 5px; flex: 1;">
+                                        <i class="fas fa-server" style="margin-right: 5px;"></i>
+                                        <span class="ip-address-text">[[ ipAddress ]]</span>
+                                    </span>
+                                    <div style="display: flex; gap: 5px;">
+                                        <el-button type="text" size="mini" @click.stop="scanIpAddress(ipAddress)" 
+                                                   style="padding: 0;" title="端口扫描">
+                                            <i class="fas fa-network-wired" style="color: #606266;"></i>
+                                        </el-button>
+                                        <el-button type="text" size="mini" @click.stop="openUrl('http://' + ipAddress)" 
+                                                   style="padding: 0;" title="访问网站">
+                                            <i class="el-icon-link" style="color: #409EFF;"></i>
+                                        </el-button>
+                                        <el-tag size="mini" type="info" style="margin-left: 5px; font-size: 10px;">
+                                            [[ getIpScanStatus(ipAddress) ]]
+                                        </el-tag>
+                                        <!-- 🎯 显示端口数量 -->
+                                        <el-tag v-if="ipScanResults[ipAddress] && ipScanResults[ipAddress].ports && ipScanResults[ipAddress].ports.length > 0"
+                                                size="mini" 
+                                                type="warning" 
+                                                style="margin-left: 5px; font-size: 10px;">
+                                            [[ ipScanResults[ipAddress].ports.length ]] 端口
+                                        </el-tag>
+                                    </div>
+                                </el-tag>
+                            </div>
+                            <div style="margin-top: 12px; padding: 10px; background: var(--bg-soft); border-radius: 8px; font-size: 13px; color: var(--accent-blue); border-left: 3px solid var(--accent-blue);">
+                                <i class="fas fa-info-circle"></i>
+                                IP地址将使用端口扫描模式，无法进行子域名发现。点击 <i class="fas fa-network-wired"></i> 进行端口扫描。
+                                <span style="margin-left: 15px;">
+                                    📊 点击上方 
+                                    <el-button type="text" @click="filterContent('ports')" style="padding: 0; color: #E6A23C; font-weight: bold;">
+                                        <i class="fas fa-network-wired"></i> IP/端口
+                                    </el-button> 统计卡片查看详细端口扫描结果
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 重复扩展域名 -->
+                    <div v-if="filteredDuplicateDomains.length > 0" style="margin-bottom: 20px;">
+                        <div class="sub-section-title">
+                            <i class="fas fa-copy" style="color: #606266; margin-right: 5px;"></i>
+                            重复扩展域名 ([[ filteredDuplicateDomains.length ]])
+                            <el-tag size="mini" type="info" style="margin-left: 10px;">已发现</el-tag>
+                        </div>
+                        <div class="expand-grid">
+                            <el-tag v-for="domain in filteredDuplicateDomains" :key="domain"
+                                    type="warning" 
+                                    size="medium" 
+                                    class="expand-item"
+                                    style="background-color: #fdf6ec; border-color: #f5dab1; color: #e6a23c; border-style: dashed;">
+                                <span class="domain-text" style="margin-right: 5px; flex: 1; word-break: break-all; white-space: normal; text-decoration: line-through;">
+                                    [[ domain ]]
+                                </span>
+                                <div style="display: flex; gap: 5px;">
+                                    <el-tag size="mini" type="info" style="margin-left: 5px; font-size: 10px;">重复</el-tag>
+                                </div>
+                            </el-tag>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #E6A23C;">
+                            <i class="fas fa-info-circle"></i>
+                            这些域名与已发现的URL重复，已自动从上方扩展发现中移除以避免重复工作。
+                        </div>
+                    </div>
+                    
+                    <!-- 黑名单域名 - 企业级视觉设计 -->
+                    <div v-if="filteredBlacklistedDomains.length > 0" style="margin-bottom: 20px;">
+                        <div class="sub-section-title">
+                            <i class="fas fa-ban" style="color: #F56C6C; margin-right: 5px;"></i>
+                            黑名单域名 ([[ filteredBlacklistedDomains.length ]])
+                            <el-tag size="mini" type="info" style="margin-left: 10px;">已过滤</el-tag>
+                        </div>
+                        <div class="expand-grid">
+                            <el-tag v-for="domain in filteredBlacklistedDomains" :key="domain"
+                                    type="danger" 
+                                    size="medium" 
+                                    class="expand-item"
+                                    style="background-color: #fef0f0; border-color: #f9b7b7; color: #F56C6C; cursor: not-allowed; border-style: solid;">
+                                <span class="domain-text" style="margin-right: 5px; flex: 1; word-break: break-all; white-space: normal; text-decoration: line-through;">
+                                    [[ domain ]]
+                                </span>
+                                <div style="display: flex; gap: 5px;">
+                                    <el-button type="text" size="mini" @click.stop="removeFromBlacklist(domain)" 
+                                               style="padding: 0;" title="从黑名单中移除">
+                                        <i class="el-icon-circle-close" style="color: #F56C6C;"></i>
+                                    </el-button>
+                                </div>
+                            </el-tag>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #F56C6C;">
+                            <i class="fas fa-info-circle"></i>
+                            这些域名已被加入黑名单，不会再次显示在上方发现结果中。点击 x 可从黑名单中移除。
+                        </div>
+                    </div>
+                    
+                    <!-- 扩展URL - 已隐藏 -->
+                    <!-- <div v-if="currentLayerData.expand_urls && currentLayerData.expand_urls.length">
+                        <div class="sub-section-title">
+                            <i class="fas fa-external-link-alt" style="color: #606266; margin-right: 5px;"></i>
+                            扩展URL ([[ currentLayerData.expand_urls.length ]])
+                        </div>
+                        <div class="expand-grid">
+                            <el-tag v-for="url in currentLayerData.expand_urls" :key="url" 
+                                    type="warning" size="small" class="expand-item">
+                                <a :href="url" target="_blank" style="color: inherit; text-decoration: none;">[[ url ]]</a>
+                            </el-tag>
+                        </div>
+                    </div> -->
+                </div>
+                
+                <!-- 端口扫描 -->
+                <div class="data-section" v-if="currentLayerData.fscan_results && currentLayerData.fscan_results.length && (activeFilter === null || activeFilter === 'ports')">
+                    <div class="section-title">
+                        <i class="fas fa-server" style="background: var(--secondary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                        端口扫描结果 (Fscan)
+                        <el-tag type="primary" size="small" style="margin-left: 10px;">
+                            [[ currentLayerData.fscan_results.length ]] 条记录
+                        </el-tag>
+                    </div>
+                    <div class="fscan-content" style="max-height: 600px; overflow-y: auto;">
+                        <div v-html="formatFscanResults(currentLayerData.fscan_results)"></div>
+                    </div>
+                </div>
+                
+                <!-- 漏洞（基础） -->
+                <div class="data-section" v-if="(activeFilter === null || activeFilter === 'vulns') && baseRealVulns.length > 0">
+                    <div class="section-title">
+                        <i class="fas fa-bug" style="color: #F56C6C;"></i>
+                        发现漏洞
+                        <el-tag size="small" type="danger" style="margin-left: 8px;">[[ baseRealVulns.length ]] 条</el-tag>
+                    </div>
+                    <el-card v-for="vuln in baseRealVulns" :key="vuln.id" 
+                             :class="['vuln-card', 'severity-' + vuln.severity]">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: bold;">[[ vuln.name ]]</span>
+                            <el-tag :type="getSeverityType(vuln.severity)" size="small">
+                                [[ vuln.severity ]]
+                            </el-tag>
+                        </div>
+                        <div style="margin-top: 10px; color: #606266;">
+                            <div><strong>URL:</strong> [[ vuln.url ]]</div>
+                            <div v-if="vuln.description"><strong>描述:</strong> [[ vuln.description ]]</div>
+                        </div>
+                    </el-card>
+                </div>
+                
+                <!-- 扩展资产端口扫描结果 -->
+                <div class="data-section" v-if="currentLayerData.expand_quick_scan && currentLayerData.expand_quick_scan.fscan_ips && currentLayerData.expand_quick_scan.fscan_ips.length && (activeFilter === null || activeFilter === 'ports')">
+                    <div class="section-title">
+                        <i class="fas fa-server" style="background: var(--secondary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                        扩展IP端口扫描结果
+                        <el-tag type="primary" size="small" style="margin-left: 10px;">
+                            [[ currentLayerData.expand_quick_scan.fscan_ips.length ]] 条记录
+                        </el-tag>
+                    </div>
+                    <div class="fscan-content" style="max-height: 400px; overflow-y: auto;">
+                        <div v-html="formatFscanResults(currentLayerData.expand_quick_scan.fscan_ips)"></div>
+                    </div>
+                </div>
+                
+
+
+
+            <!-- 拓展IP地址端口扫描结果 - 独立扫描系统 -->
+            <div class="data-section" 
+                 v-if="Object.keys(ipScanResults).length > 0 && (activeFilter === null || activeFilter === 'ports')">
+                    <div class="section-title">
+                        <i class="fas fa-server" style="background: var(--secondary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                        拓展IP地址端口扫描结果
+                        <el-tag type="primary" size="small" style="margin-left: 10px;">
+                            [[ Object.keys(ipScanResults).length ]] 个IP地址
+                        </el-tag>
+                        <el-tag size="mini" type="info" style="margin-left: 5px;">独立全端口扫描</el-tag>
+                    </div>
+                    <div style="max-height: 600px; overflow-y: auto;">
+                        <div v-for="(result, ipAddress) in ipScanResults" :key="ipAddress" 
+                             style="border: 1px solid var(--border-accent); border-radius: 12px; margin-bottom: 16px; background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-card) 100%); box-shadow: var(--card-shadow);">
+                            
+                            <!-- IP头部信息 -->
+                            <div style="padding: 12px; background: #f3e5f5; border-bottom: 1px solid #e0e0e0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="display: flex; align-items: center;">
+                                        <i class="fas fa-server" style="background: var(--info-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-right: 8px; font-size: 16px;"></i>
+                                        <span class="ip-address-text" style="font-size: 16px;">[[ ipAddress ]]</span>
+                                        <el-tag :type="getIpStatusType(result.status)" size="mini" style="margin-left: 10px;">
+                                            [[ result.status || '未知状态' ]]
+                                        </el-tag>
+                                        <el-tag v-if="result.portRange" size="mini" type="info" style="margin-left: 5px;">
+                                            [[ getPortRangeDesc(result.portRange) ]]
+                                        </el-tag>
+                                        <el-tag size="mini" type="info" style="margin-left: 5px;">
+                                            来源: 拓展发现
+                                        </el-tag>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <el-button size="mini" type="primary" @click="viewIpDetails(ipAddress)" title="查看详情">
+                                            <i class="fas fa-eye"></i> 详情
+                                        </el-button>
+                                        <el-button size="mini" type="success" @click="openUrl('http://' + ipAddress)" title="访问Web服务">
+                                            <i class="el-icon-link"></i> 访问
+                                        </el-button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 端口详情 -->
+                            <div style="padding: 15px;">
+                                <div v-if="result.ports && result.ports.length > 0">
+                                    <h4 style="margin: 0 0 10px 0; color: #333;">
+                                        <i class="fas fa-network-wired" style="margin-right: 5px; color: #606266;"></i>
+                                        开放端口 ([[ result.ports.length ]]) 
+                                        <el-tag size="mini" type="info" style="margin-left: 8px;">fscan全端口扫描</el-tag>
+                                    </h4>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+                                        <el-tag v-for="port in result.ports" :key="port.port"
+                                                :type="getPortType(port)"
+                                                size="medium"
+                                                style="cursor: pointer;"
+                                                @click="showPortDetails(port, ipAddress)">
+                                            <i class="fas fa-plug" style="margin-right: 5px;"></i>
+                                            [[ port.port ]]/[[ port.protocol ]]
+                                            <span v-if="port.service !== 'unknown'" style="margin-left: 5px;">
+                                                - [[ port.service ]]
+                                            </span>
+                                        </el-tag>
+                                    </div>
+                                    
+                                    <!-- Web服务列表 -->
+                                    <div v-if="result.webServices && result.webServices.length > 0" style="margin-top: 15px;">
+                                        <h5 style="margin: 0 0 8px 0; color: #666;">
+                                            <i class="fas fa-globe" style="margin-right: 5px; color: #606266;"></i>
+                                            Web服务
+                                        </h5>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            <el-button v-for="webService in result.webServices" :key="webService.url"
+                                                       size="mini" type="success" plain
+                                                       @click="openUrl(webService.url)">
+                                                <i class="el-icon-link"></i> [[ webService.url ]]
+                                            </el-button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div v-else style="text-align: center; color: #999; padding: 20px;">
+                                    <i class="fas fa-times-circle" style="font-size: 24px; margin-bottom: 8px;"></i>
+                                    <p>未发现开放端口</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 扩展资产漏洞结果 -->
+                <div class="data-section" v-if="(activeFilter === null || activeFilter === 'vulns') && expandRealVulns.length > 0">
+                    <div class="section-title">
+                        <i class="fas fa-bug" style="color: #F56C6C;"></i>
+                        扩展URL漏洞
+                        <el-tag size="small" type="danger" style="margin-left: 8px;">[[ expandRealVulns.length ]] 条</el-tag>
+                    </div>
+                    <el-card v-for="vuln in expandRealVulns" :key="vuln.id" 
+                             :class="['vuln-card', 'severity-' + (vuln.severity || 'info')]">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: bold;">[[ vuln.name ]]</span>
+                            <el-tag :type="getSeverityType(vuln.severity)" size="small">
+                                [[ vuln.severity || 'info' ]]
+                            </el-tag>
+                        </div>
+                        <div style="margin-top: 10px; color: #606266;">
+                            <div><strong>URL:</strong> [[ vuln.url ]]</div>
+                            <div v-if="vuln.description"><strong>描述:</strong> [[ vuln.description ]]</div>
+                            <el-tag size="mini" type="info" style="margin-top: 5px;">扩展资产</el-tag>
+                        </div>
+                    </el-card>
+                </div>
+
+                <!-- 无漏洞占位标题（格式统一且不占用URL） -->
+                <div class="data-section" v-if="(activeFilter === null || activeFilter === 'vulns') && totalRealVulns === 0">
+                    <div class="section-title">
+                        <i class="fas fa-bug" style="color: #F56C6C;"></i>
+                        发现漏洞
+                        <el-tag size="small" type="success" style="margin-left: 8px;">暂无</el-tag>
+                    </div>
+                </div>
+                
+            </div> <!-- 🎯 结束 currentLayerData 条件块 -->
+        </el-tab-pane>
+        
+        <!-- 终端日志标签页 -->
+        <el-tab-pane label="终端日志" name="logs">
+            <div style="margin-bottom: 15px;">
+                <el-card shadow="never">
+                    <div slot="header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>
+                            <i class="fas fa-terminal" style="margin-right: 5px; color: #606266;"></i>
+                            实时扫描日志
+                        </span>
+                        <div>
+                            <el-button size="mini" @click="refreshLogs" icon="el-icon-refresh">刷新</el-button>
+                            <el-button size="mini" @click="toggleAutoRefresh" 
+                                     :type="autoRefreshLogs ? 'success' : 'info'">
+                                <i :class="autoRefreshLogs ? 'el-icon-video-pause' : 'el-icon-video-play'"></i>
+                                [[ autoRefreshLogs ? '停止自动刷新' : '开启自动刷新' ]]
+                            </el-button>
+                            <el-button size="mini" @click="clearLogDisplay" icon="el-icon-delete">清空显示</el-button>
+                        </div>
+                    </div>
+                    <div class="log-container" style="background: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; font-size: 13px; padding: 15px; border-radius: 4px; max-height: 500px; overflow-y: auto;">
+                        <div v-if="scanLogs.length === 0" style="color: #666; text-align: center; padding: 20px;">
+                            <i class="el-icon-info"></i> 暂无日志信息
+                        </div>
+                        <div v-else>
+                            <div v-for="(log, index) in displayLogs" :key="index" 
+                                 class="log-line"
+                                 :class="getLogLineClass(log)"
+                                 style="margin-bottom: 2px; padding: 2px 0; word-wrap: break-word;">
+                                <span style="color: #666; margin-right: 8px;">[[ formatLogTime(log.timestamp) ]]</span>
+                                <span>[[ log.content ]]</span>
+                            </div>
+                        </div>
+                    </div>
+                </el-card>
+            </div>
+        </el-tab-pane>
+        
+        <!-- 扫描状态标签页 -->
+        <el-tab-pane label="扫描状态" name="status">
+            <div style="margin-bottom: 15px;" v-if="scanStatus">
+                <el-card shadow="never">
+                    <div slot="header">
+                        <i class="fas fa-tasks" style="margin-right: 5px; color: #606266;"></i>
+                        扫描状态与进度
+                    </div>
+                    <el-row :gutter="15" style="margin-bottom: 10px;">
+                        <el-col :span="8">
+                            <div class="status-item">
+                                <div class="status-label">开始时间</div>
+                                <div class="status-value">[[ scanStatus.start_time || '-' ]]</div>
+                            </div>
+                        </el-col>
+                        <el-col :span="8">
+                            <div class="status-item">
+                                <div class="status-label">当前阶段</div>
+                                <div class="status-value">[[ getStageLabel(scanStatus.current_stage) ]]</div>
+                            </div>
+                        </el-col>
+                        <el-col :span="8">
+                            <div class="status-item">
+                                <div class="status-label">总体进度</div>
+                                <el-progress :percentage="scanStatus.progress || 0" 
+                                           :status="scanStatus.scan_completed ? 'success' : ''">
+                                </el-progress>
+                            </div>
+                        </el-col>
+                    </el-row>
+                    
+                    <!-- 扫描阶段进度 -->
+                    <div v-if="scanStatus.scan_stages && Object.keys(scanStatus.scan_stages).length" style="margin-top: 20px;">
+                        <h4>扫描阶段进度</h4>
+                        <div v-for="key in orderedStageKeys" :key="key" v-if="scanStatus.scan_stages[key]" 
+                             class="stage-item" style="margin-bottom: 15px; padding: 15px; border: 1px solid #EBEEF5; border-radius: 4px;">
+                            
+                            <div class="stage-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <strong>[[ getStageLabel(key) ]]</strong>
+                                <div>
+                                    <el-tag :type="getStageTagType(scanStatus.scan_stages[key].status)" size="mini">
+                                        [[ getStageStatusText(scanStatus.scan_stages[key].status) ]]
+                                    </el-tag>
+                                </div>
+                            </div>
+                            
+                            <div v-if="scanStatus.scan_stages[key].status === 'in_progress'" class="stage-progress-bar" style="margin-bottom: 8px;">
+                                <el-progress :percentage="scanStatus.scan_stages[key].progress || 0" 
+                                           :status="scanStatus.scan_stages[key].status === 'completed' ? 'success' : ''">
+                                </el-progress>
+                            </div>
+                            
+                            <div class="stage-info">
+                                <div v-if="scanStatus.scan_stages[key].start_time" style="font-size: 12px; color: #909399; margin-bottom: 5px;">
+                                    开始: [[ scanStatus.scan_stages[key].start_time ]]
+                                    <span v-if="scanStatus.scan_stages[key].end_time"> | 结束: [[ scanStatus.scan_stages[key].end_time ]]</span>
+                                </div>
+                                <div v-if="scanStatus.scan_stages[key].details" style="color: #606266; font-size: 13px;">
+                                    [[ scanStatus.scan_stages[key].details ]]
+                                </div>
+                                <span v-if="scanStatus.scan_stages[key].error" class="stage-error" style="color: #F56C6C;">
+                                    <i class="el-icon-warning"></i> [[ scanStatus.scan_stages[key].error ]]
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </el-card>
+            </div>
+        </el-tab-pane>
+        
+        <!-- 原始数据标签页 -->
+        <el-tab-pane label="原始数据" name="rawdata">
+            <div style="margin-bottom: 15px;">
+                <el-card shadow="never">
+                    <div slot="header">
+                        <span>
+                            <i class="fas fa-file-code" style="margin-right: 5px; color: #606266;"></i>
+                            原始扫描数据
+                        </span>
+                    </div>
+                    
+                    <!-- 基础信息文件 -->
+                    <div v-if="rawDataFiles.basic_info" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-info-circle" style="color: #606266;"></i> 基础信息汇总</h4>
+                        <pre style="background: #f5f7fa; padding: 15px; border-radius: 4px; max-height: 400px; overflow-y: auto; font-size: 12px; line-height: 1.4;">[[ rawDataFiles.basic_info ]]</pre>
+                    </div>
+                    
+                    <!-- 扩展技术信息 -->
+                    <div v-if="rawDataFiles.technical_info" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-cogs" style="color: #606266;"></i> 扩展技术信息</h4>
+                        <el-collapse>
+                            <el-collapse-item title="证书和哈希信息" name="1">
+                                <pre style="white-space: pre-wrap; background: #f5f7fa; padding: 15px; border-radius: 4px; font-size: 12px; line-height: 1.4;">[[ rawDataFiles.technical_info ]]</pre>
+                            </el-collapse-item>
+                        </el-collapse>
+                    </div>
+                    
+                    <!-- FOFA技术分析详情 -->
+                    <div v-if="rawDataFiles.fofa_data && rawDataFiles.fofa_data.length" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-chart-bar" style="color: #606266;"></i> FOFA技术分析详情</h4>
+                        <div v-for="(fofa, index) in rawDataFiles.fofa_data" :key="index" style="margin-bottom: 15px;">
+                            <h5>指纹特征: [[ fofa.icon_hash ]]</h5>
+                            <el-table :data="fofa.domains" size="small" stripe>
+                                <el-table-column prop="url" label="URL" min-width="300">
+                                    <template slot-scope="scope">
+                                        <a :href="scope.row.url || scope.row" target="_blank">[[ scope.row.url || scope.row ]]</a>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                        </div>
+                    </div>
+                    
+                    <!-- 内容挖掘分析详情 -->
+                    <div v-if="rawDataFiles.url_body_info && rawDataFiles.url_body_info.length" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-microscope" style="color: #606266;"></i> 页面内容挖掘分析详情</h4>
+                        <el-table :data="rawDataFiles.url_body_info.slice(0, 5)" stripe size="small">
+                            <el-table-column prop="domain" label="域名" min-width="240"></el-table-column>
+                            <el-table-column prop="source" label="来源" min-width="300"></el-table-column>
+                        </el-table>
+                    </div>
+                </el-card>
+            </div>
+        </el-tab-pane>
+
+
+        
+
+        <!-- 重复的原始数据标签页已删除 -->
+                            <el-tag v-if="activeFilter" size="small" type="primary" style="margin-left: 10px;">
+                                [[ getFilterLabel(activeFilter) ]] 专项数据
+                            </el-tag>
+                        </span>
+                    </div>
+                    
+                    <!-- 基础信息文件（只在显示全部或URL过滤时显示） -->
+                    <div v-if="rawDataFiles.basic_info && shouldShowRawDataSection('basic')" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-info-circle" style="color: #606266;"></i> 基础信息汇总</h4>
+                        <pre style="background: #f5f7fa; padding: 15px; border-radius: 4px; max-height: 400px; overflow-y: auto; font-size: 12px; line-height: 1.4;">[[ rawDataFiles.basic_info ]]</pre>
+                    </div>
+                    
+                    <!-- 扩展技术信息（只在显示全部或端口过滤时显示） -->
+                    <div v-if="rawDataFiles.technical_info && shouldShowRawDataSection('technical')" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-cogs" style="color: #606266;"></i> 扩展技术信息</h4>
+                        <el-collapse>
+                            <el-collapse-item title="证书和哈希信息" name="tech">
+                                <pre style="background: #f5f7fa; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 12px; line-height: 1.4;">[[ rawDataFiles.technical_info ]]</pre>
+                            </el-collapse-item>
+                        </el-collapse>
+                    </div>
+                    
+                    <!-- FOFA技术分析详情（只在显示全部或域名过滤时显示） -->
+                    <div v-if="rawDataFiles.fofa_data && rawDataFiles.fofa_data.length && shouldShowRawDataSection('fofa')" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-chart-bar" style="color: #606266;"></i> FOFA技术分析详情</h4>
+                        <div v-for="(fofa, index) in rawDataFiles.fofa_data" :key="index" style="margin-bottom: 15px;">
+                            <div style="font-weight: bold; color: #409EFF; margin-bottom: 8px;">
+                                <i class="fas fa-fingerprint"></i> 指纹特征: [[ fofa.file_name ]]
+                            </div>
+                            <el-table :data="fofa.domains.slice(0, 5)" stripe size="small">
+                                <el-table-column label="发现资产" min-width="200">
+                                    <template slot-scope="scope">
+                                        <a :href="scope.row.url" target="_blank" class="url-link" v-if="scope.row.url">
+                                            [[ scope.row.url ]]
+                                        </a>
+                                        <span v-else>[[ scope.row ]]</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="发现方式" width="120">
+                                    <template slot-scope="scope">
+                                        <el-tag size="mini" type="info">FOFA引擎</el-tag>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <div v-if="fofa.domains.length > 5" style="text-align: center; margin-top: 5px; font-size: 12px; color: #909399;">
+                                还有 [[ fofa.domains.length - 5 ]] 个资产未显示，详细信息请查看扫描结果标签
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 内容挖掘分析详情（只在显示全部或域名过滤时显示） -->
+                    <div v-if="rawDataFiles.url_body_info && rawDataFiles.url_body_info.length && shouldShowRawDataSection('content')" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-microscope" style="color: #606266;"></i> 页面内容挖掘分析详情</h4>
+                        <el-table :data="rawDataFiles.url_body_info.slice(0, 5)" stripe size="small">
+                            <el-table-column label="发现域名" min-width="200">
+                                <template slot-scope="scope">
+                                    <span>[[ scope.row.domain ]]</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="来源页面" min-width="250">
+                                <template slot-scope="scope">
+                                    <a :href="scope.row.source" target="_blank" class="url-link">
+                                        [[ scope.row.source ]]
+                                    </a>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="发现方式" width="120">
+                                <template slot-scope="scope">
+                                    <el-tag size="mini" type="info">内容挖掘</el-tag>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <div v-if="rawDataFiles.url_body_info.length > 5" style="text-align: center; margin-top: 5px; font-size: 12px; color: #909399;">
+                            还有 [[ rawDataFiles.url_body_info.length - 5 ]] 个发现未显示，详细信息请查看扫描结果标签
+                        </div>
+                    </div>
+                    
+                    <!-- 端口扫描原始数据（只在端口过滤时显示） -->
+                    <div v-if="shouldShowRawDataSection('ports') && (currentLayerData.fscan_results || (currentLayerData.expand_quick_scan && currentLayerData.expand_quick_scan.fscan_ips))" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-server" style="color: #606266;"></i> 端口扫描原始数据</h4>
+                        <div v-if="currentLayerData.fscan_results && currentLayerData.fscan_results.length">
+                            <h5>基础端口扫描结果</h5>
+                            <pre style="background: #f5f7fa; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 12px; line-height: 1.4;">[[ currentLayerData.fscan_results.join('\n') ]]</pre>
+                        </div>
+                        <div v-if="currentLayerData.expand_quick_scan && currentLayerData.expand_quick_scan.fscan_ips && currentLayerData.expand_quick_scan.fscan_ips.length" style="margin-top: 15px;">
+                            <h5>扩展IP端口扫描结果</h5>
+                            <pre style="background: #f5f7fa; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 12px; line-height: 1.4;">[[ currentLayerData.expand_quick_scan.fscan_ips.join('\n') ]]</pre>
+                        </div>
+                    </div>
+                    
+                    <!-- 漏洞扫描原始数据（只在漏洞过滤时显示） -->
+                    <div v-if="shouldShowRawDataSection('vulns') && (currentLayerData.vulnerabilities || (currentLayerData.expand_quick_scan && currentLayerData.expand_quick_scan.afrog_urls))" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-bug" style="color: #F56C6C;"></i> 漏洞扫描原始数据</h4>
+                        <div v-if="currentLayerData.vulnerabilities && currentLayerData.vulnerabilities.length">
+                            <h5>基础漏洞扫描结果</h5>
+                            <pre style="background: #f5f7fa; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 12px; line-height: 1.4;">[[ JSON.stringify(currentLayerData.vulnerabilities, null, 2) ]]</pre>
+                        </div>
+                        <div v-if="currentLayerData.expand_quick_scan && currentLayerData.expand_quick_scan.afrog_urls && currentLayerData.expand_quick_scan.afrog_urls.length" style="margin-top: 15px;">
+                            <h5>扩展URL漏洞扫描结果</h5>
+                            <pre style="background: #f5f7fa; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; font-size: 12px; line-height: 1.4;">[[ JSON.stringify(currentLayerData.expand_quick_scan.afrog_urls, null, 2) ]]</pre>
+                        </div>
+                    </div>
+                    
+                    <!-- 扫描状态和进度信息（重要：在原始数据中也显示） -->
+                    <div v-if="scanStatus" style="margin-bottom: 20px;">
+                        <h4><i class="fas fa-tasks" style="color: #606266;"></i> 扫描状态和进度信息</h4>
+                        <el-card shadow="never">
+                            <div style="margin-bottom: 15px;">
+                                <el-tag :type="getScanStatusType()" size="small">
+                                    [[ getScanStatusText() ]]
+                                </el-tag>
+                                <span style="margin-left: 15px; font-size: 12px; color: #666;">
+                                    总体进度: [[ scanStatus.progress || 0 ]]%
+                                </span>
+                            </div>
+                            
+                            <div v-if="scanStatus.current_stage" style="margin-bottom: 10px;">
+                                <strong>当前阶段:</strong> [[ getStageLabel(scanStatus.current_stage) ]]
+                            </div>
+                            
+                            <div v-if="scanStatus.start_time" style="margin-bottom: 10px;">
+                                <strong>开始时间:</strong> [[ scanStatus.start_time ]]
+                            </div>
+                            
+                            <!-- 扫描阶段详情 -->
+                            <div v-if="scanStatus.scan_stages && Object.keys(scanStatus.scan_stages).length" style="margin-top: 15px;">
+                                <h5>扫描阶段进度</h5>
+                                <div v-for="key in orderedStageKeys" :key="key" v-if="scanStatus.scan_stages[key]" 
+                                     style="margin-bottom: 10px; padding: 10px; border: 1px solid #EBEEF5; border-radius: 4px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <strong>[[ getStageLabel(key) ]]</strong>
+                                        <el-tag :type="getStageTagType(scanStatus.scan_stages[key].status)" size="mini">
+                                            [[ getStageStatusText(scanStatus.scan_stages[key].status) ]]
+                                        </el-tag>
+                                    </div>
+                                    
+                                    <div v-if="scanStatus.scan_stages[key].status === 'in_progress' && scanStatus.scan_stages[key].progress" style="margin-top: 5px;">
+                                        <el-progress :percentage="scanStatus.scan_stages[key].progress || 0" size="small"></el-progress>
+                                    </div>
+                                    
+                                    <div v-if="scanStatus.scan_stages[key].details" style="font-size: 12px; color: #666; margin-top: 5px;">
+                                        [[ scanStatus.scan_stages[key].details ]]
+                                    </div>
+                                    
+                                    <div v-if="scanStatus.scan_stages[key].error" style="color: #F56C6C; font-size: 12px; margin-top: 5px;">
+                                        <i class="el-icon-warning"></i> [[ scanStatus.scan_stages[key].error ]]
+                                    </div>
+                                </div>
+                            </div>
+                        </el-card>
+                    </div>
+                </el-card>
+            </div>
+        </el-tab-pane>
+        -->
+        
+        <!-- 已删除重复的扫描状态标签页 -->
+        <!--
+            <div style="margin-bottom: 15px;" v-if="scanStatus">
+                <el-card shadow="never">
+                    <div slot="header">
+                        <span>
+                            <i class="fas fa-tasks" style="margin-right: 5px; color: #606266;"></i>
+                            扫描概览
+                        </span>
+                        <el-tag :type="getScanStatusType()" size="small">
+                            [[ getScanStatusText() ]]
+                        </el-tag>
+                    </div>
+                    
+                    <el-row :gutter="20">
+                        <el-col :span="8">
+                            <div class="status-item">
+                                <div class="status-label">开始时间</div>
+                                <div class="status-value">[[ scanStatus.start_time || '-' ]]</div>
+                            </div>
+                        </el-col>
+                        <el-col :span="8">
+                            <div class="status-item">
+                                <div class="status-label">当前阶段</div>
+                                <div class="status-value">[[ getStageLabel(scanStatus.current_stage) ]]</div>
+                            </div>
+                        </el-col>
+                        <el-col :span="8">
+                            <div class="status-item">
+                                <div class="status-label">总体进度</div>
+                                <el-progress :percentage="scanStatus.progress || 0" 
+                                           :status="scanStatus.scan_completed ? 'success' : ''">
+                                </el-progress>
+                            </div>
+                        </el-col>
+                    </el-row>
+                    
+                    <!-- 扫描阶段进度 -->
+                    <div v-if="scanStatus.scan_stages && Object.keys(scanStatus.scan_stages).length" style="margin-top: 20px;">
+                        <h4>扫描阶段进度</h4>
+                        <div v-for="key in orderedStageKeys" :key="key" v-if="scanStatus.scan_stages[key]" 
+                             class="stage-item" style="margin-bottom: 15px; padding: 15px; border: 1px solid #EBEEF5; border-radius: 4px;">
+                            
+                            <div class="stage-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <strong>[[ getStageLabel(key) ]]</strong>
+                                <div>
+                                    <el-tag :type="getStageTagType(scanStatus.scan_stages[key].status)" size="mini">
+                                        [[ getStageStatusText(scanStatus.scan_stages[key].status) ]]
+                                    </el-tag>
+                                </div>
+                            </div>
+                            
+                            <div v-if="scanStatus.scan_stages[key].status === 'in_progress'" class="stage-progress-bar">
+                                <el-progress :percentage="scanStatus.scan_stages[key].progress || 0" 
+                                           :status="scanStatus.scan_stages[key].status === 'completed' ? 'success' : ''">
+                                </el-progress>
+                            </div>
+                            
+                            <div class="stage-info">
+                                <div v-if="scanStatus.scan_stages[key].start_time" style="font-size: 12px; color: #909399; margin-bottom: 5px;">
+                                    开始: [[ scanStatus.scan_stages[key].start_time ]]
+                                    <span v-if="scanStatus.scan_stages[key].end_time"> | 结束: [[ scanStatus.scan_stages[key].end_time ]]</span>
+                                </div>
+                                <div v-if="scanStatus.scan_stages[key].details" style="color: #606266; font-size: 13px;">
+                                    [[ scanStatus.scan_stages[key].details ]]
+                                </div>
+                                <span v-if="scanStatus.scan_stages[key].error" class="stage-error" style="color: #F56C6C;">
+                                    <i class="el-icon-warning"></i> [[ scanStatus.scan_stages[key].error ]]
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </el-card>
+            </div>
+        </el-tab-pane>
+        -->
+        
+
+
+        
+    </el-tabs>
+</el-main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.vueApp = new Vue({
+    el: '#app',
+    mixins: [baseMixin],
+    delimiters: ['[[', ']]'],
+    data() {
+        // 安全获取域名参数
+        const domainParam = '{{ domain }}';
+        const safeDomain = (domainParam && domainParam !== 'None' && domainParam !== 'undefined') ? domainParam : null;
+        
+        return {
+            domain: safeDomain,
+            domainData: {
+                domain: safeDomain,
+                layers: {}
+            },
+            activeTab: 'scan',
+            currentLayer: '1',
+            loading: true,
+            urlCurrentPage: 1,
+            urlPageSize: 20,
+            expandUrlCurrentPage: 1,
+            expandUrlPageSize: 20,
+            activeFilter: null,  // 当前激活的过滤器
+            scanStatus: {
+                scan_stages: {},
+                progress: 0,
+                current_stage: '',
+                start_time: '',
+                scan_completed: false
+            },
+            // 日志相关数据
+            scanLogs: [],
+            autoRefreshLogs: false,
+            maxDisplayLogs: 100,
+            logPollingInterval: null,
+            showAllLogsFlag: false,
+            statusPollingInterval: null,
+            expandDomainStatus: {},  // 扩展域名的扫描状态
+            
+            // 原始数据相关
+            rawDataFiles: {
+                basic_info: '',         // 核心基础信息
+                technical_info: '',     // 技术细节信息
+                fofa_data: [],
+                url_body_info: []
+            },
+            
+            // 黑名单相关
+            blacklist: [], // 存储黑名单域名列表
+            blacklistedFofaDomains: [], // FOFA发现但被黑名单过滤的域名
+            blacklistedContentDomains: [], // 内容挖掘发现但被黑名单过滤的域名
+            
+            // 🎯 企业级域名分类管理系统
+            duplicateFofaDomains: [], // FOFA发现但与已发现URL重复的域名
+            duplicateContentDomains: [], // 内容挖掘发现但与已发现URL重复的域名
+            duplicateBaseDomains: [], // base_info中重复的网站信息
+            discoveredUrlDomains: [], // 已发现的URL中提取的域名列表
+            normalizedDiscoveredDomains: [], // 已发现域名的规范化版本
+            
+            // IP地址独立处理系统
+            discoveredIpAddresses: [], // 发现的IP地址列表
+            ipScanResults: {}, // IP扫描结果存储
+            selectedPortRange: 'all', // 选择的端口范围 - 默认全端口
+            
+            // 扫描阶段的正确顺序 - 已移至计算属性
+        }
+    },
+    computed: {
+        currentLayerData() {
+            return this.domainData.layers[this.currentLayer] || {};
+        },
+        
+        // 安全的扫描阶段顺序 - 只有当scanStatus存在时才返回
+        orderedStageKeys() {
+            if (!this.scanStatus || !this.scanStatus.scan_stages) {
+                return [];
+            }
+            const defaultOrder = [
+                'subdomain_discovery',
+                'http_probe', 
+                'vulnerability_scan',
+                'port_scan',
+                'expand_scan',
+                'report_generation'
+            ];
+            // 只返回实际存在的阶段
+            return defaultOrder.filter(key => this.scanStatus.scan_stages[key]);
+        },
+        paginatedUrls() {
+            const urls = this.currentLayerData.urls || [];
+            const start = (this.urlCurrentPage - 1) * this.urlPageSize;
+            const end = start + this.urlPageSize;
+            return urls.slice(start, end);
+        },
+        paginatedExpandUrls() {
+            const urls = this.currentLayerData.expand_scanned_urls || [];
+            const start = (this.expandUrlCurrentPage - 1) * this.expandUrlPageSize;
+            const end = start + this.expandUrlPageSize;
+            return urls.slice(start, end);
+        },
+        totalUrls() {
+            let total = 0;
+            Object.values(this.domainData.layers).forEach(layer => {
+                // 基础发现的URL
+                total += (layer.urls || []).length;
+                // 扩展发现的URL（已扫描）
+                total += (layer.expand_scanned_urls || []).length;
+                // 扩展URL（未扫描） - 已隐藏，不统计
+                // total += (layer.expand_urls || []).length;
+            });
+            return total;
+        },
+        totalIps() {
+            let total = 0;
+            Object.values(this.domainData.layers).forEach(layer => {
+                total += (layer.ips || []).length;
+            });
+            
+            // 🎯 加上发现的IP地址数量（独立扫描系统）
+            total += this.discoveredIpAddresses.length;
+            
+            return total;
+        },
+        totalDomains() {
+            let total = 0;
+            
+            // 基础扩展域名
+            Object.values(this.domainData.layers).forEach(layer => {
+                total += (layer.expand_domains || []).length;
+            });
+            
+            // 加上FOFA发现的域名（过滤后的）
+            total += this.validFofaTotalCount;
+            
+            // 🎯 修复：加上内容挖掘发现的有效域名（已过滤重复和黑名单的）
+            total += this.validContentMiningCount;
+            
+            // 🎯 重复和黑名单域名不计入扩展域名统计，只用于显示
+            // 不再计算: total += this.filteredDuplicateDomains.length;
+            // 不再计算: total += this.filteredBlacklistedDomains.length;
+            
+            return total;
+        },
+        totalVulns() {
+            let total = 0;
+            Object.values(this.domainData.layers).forEach(layer => {
+                // 🎯 修复：只统计真正的漏洞，不包含正常的URL记录
+                const vulnerabilities = layer.vulnerabilities || [];
+                // 过滤掉非漏洞数据（如普通的URL记录）
+                const realVulns = vulnerabilities.filter(vuln => {
+                    if (!vuln) return false;
+                    // 检查多种可能的严重性字段
+                    const severity = vuln.severity || (vuln.pocinfo && vuln.pocinfo.infoseg);
+                    // 过滤掉info级别的，只保留真正的漏洞
+                    return severity && severity !== '' && severity !== 'info';
+                });
+                total += realVulns.length;
+                
+                // 扩展资产的漏洞（afrog发现的才是真正漏洞）
+                if (layer.expand_quick_scan && layer.expand_quick_scan.afrog_urls) {
+                    // afrog_urls中的才是漏洞，但需要验证结构
+                    const afrogVulns = layer.expand_quick_scan.afrog_urls.filter(item => {
+                        return item && (item.severity || item.risk || item.vuln_name);
+                    });
+                    total += afrogVulns.length;
+                }
+            });
+            return total;
+        },
+        // 当前层的真实漏洞集合（用于正确显示0的情况）
+        baseRealVulns() {
+            const vulns = (this.currentLayerData.vulnerabilities || []).filter(v => {
+                if (!v) return false;
+                // 检查多种可能的严重性字段
+                const severity = v.severity || (v.pocinfo && v.pocinfo.infoseg);
+                // 过滤掉info级别的，只保留真正的漏洞
+                return severity && severity !== '' && severity !== 'info';
+            });
+            return vulns;
+        },
+        expandRealVulns() {
+            const arr = (this.currentLayerData.expand_quick_scan && this.currentLayerData.expand_quick_scan.afrog_urls) ? this.currentLayerData.expand_quick_scan.afrog_urls : [];
+            return arr.filter(item => item && (item.severity || item.risk || item.vuln_name));
+        },
+        totalRealVulns() {
+            return (this.baseRealVulns ? this.baseRealVulns.length : 0) + (this.expandRealVulns ? this.expandRealVulns.length : 0);
+        },
+        
+        // 🎯 IP扫描结果显示条件 - 详细日志审计
+        shouldShowIpScanResults() {
+            const hasData = Object.keys(this.ipScanResults || {}).length > 0;
+            const condition1 = hasData;
+            const condition2 = this.activeFilter === null || this.activeFilter === 'ports';
+            const finalResult = condition1 && condition2;
+            
+            console.log('🎯 [显示条件审计] shouldShowIpScanResults:');
+            console.log('  📊 ipScanResults数据:', this.ipScanResults);
+            console.log('  📊 数据键值:', Object.keys(this.ipScanResults || {}));
+            console.log('  📊 数据数量:', Object.keys(this.ipScanResults || {}).length);
+            console.log('  ✅ 条件1-有数据:', hasData);
+            console.log('  ✅ 条件2-过滤器匹配:', condition2, '(activeFilter=', this.activeFilter, ')');
+            console.log('  🎯 最终结果:', finalResult);
+            
+            if (finalResult) {
+                console.log('🎯 [DOM渲染] 应该显示IP扫描结果区域');
+            } else {
+                console.log('❌ [DOM渲染] 不显示IP扫描结果，原因: 条件1=' + condition1 + ', 条件2=' + condition2);
+            }
+            
+            return finalResult;
+        },
+        displayLogs() {
+            if (this.showAllLogsFlag) {
+                return this.scanLogs;
+            }
+            return this.scanLogs.slice(-this.maxDisplayLogs);
+        },
+        totalPorts() {
+            let total = 0;
+            Object.values(this.domainData.layers).forEach(layer => {
+                // 基础端口扫描
+                total += (layer.fscan_results || []).length;
+                // 扩展资产的端口扫描
+                if (layer.expand_quick_scan && layer.expand_quick_scan.fscan_ips) {
+                    total += layer.expand_quick_scan.fscan_ips.length;
+                }
+            });
+            return total;
+        },
+        
+        // 日志显示相关计算属性
+        displayLogs() {
+            if (this.showAllLogsFlag || this.scanLogs.length <= this.maxDisplayLogs) {
+                return this.scanLogs;
+            }
+            return this.scanLogs.slice(-this.maxDisplayLogs);
+        },
+        
+        // 过滤后的黑名单域名 - 组合所有来源  
+        filteredBlacklistedDomains() {
+            const allBlacklistedDomains = [
+                ...this.blacklistedFofaDomains,
+                ...this.blacklistedContentDomains,
+                // 包含手动添加到黑名单但不在FOFA/内容挖掘中的域名
+                ...this.blacklist.filter(domain => 
+                    !this.blacklistedFofaDomains.includes(domain) && 
+                    !this.blacklistedContentDomains.includes(domain)
+                )
+            ];
+            
+            // 去重并返回
+            return [...new Set(allBlacklistedDomains)];
+        },
+        
+        // 重复域名列表
+        filteredDuplicateDomains() {
+            return [...this.duplicateFofaDomains, ...this.duplicateContentDomains, ...this.duplicateBaseDomains].filter((domain, index, self) => {
+                return self.indexOf(domain) === index; // 去重
+            });
+        },
+        
+        // 计算属性：有效的FOFA发现数据（排除黑名单）
+        validFofaData() {
+            if (!this.rawDataFiles.fofa_data) {
+                console.log('[调试] FOFA数据为空');
+                return [];
+            }
+            
+            const result = this.rawDataFiles.fofa_data.map(fofa => {
+                const filteredDomains = fofa.domains.filter(item => {
+                    const domain = this.extractDomain(item.url || item);
+                    const isBlacklisted = this.blacklist.includes(domain);
+                    const isDuplicate = this.discoveredUrlDomains.includes(domain);
+                    
+                    if (isBlacklisted) {
+                        console.log(`[调试] FOFA域名被黑名单过滤: ${domain}`);
+                    }
+                    if (isDuplicate) {
+                        console.log(`[调试] FOFA域名重复: ${domain}`);
+                    }
+                    
+                    return !isBlacklisted && !isDuplicate;
+                });
+                
+                return {
+                    ...fofa,
+                    domains: filteredDomains
+                };
+            }).filter(fofa => fofa.domains.length > 0);
+            
+            console.log(`[调试] 有效FOFA数据: ${result.length}个分组`);
+            return result;
+        },
+        
+        // 计算属性：有效的FOFA域名列表
+        validFofaDomains() {
+            const domains = [];
+            this.validFofaData.forEach(fofa => {
+                fofa.domains.forEach(item => {
+                    domains.push(item);
+                });
+            });
+            console.log(`[调试] 有效FOFA域名数量: ${domains.length}`);
+            return domains;
+        },
+        
+        // 计算属性：有效的FOFA总数
+        validFofaTotalCount() {
+            const count = this.validFofaDomains.length;
+            console.log(`[调试] FOFA总数: ${count}`);
+            return count;
+        },
+        
+        // 计算属性：有效的内容挖掘域名（排除黑名单）
+        validContentMiningDomains() {
+            if (!this.rawDataFiles.url_body_info) {
+                console.log('[调试] 内容挖掘数据为空');
+                return [];
+            }
+            
+            const result = this.rawDataFiles.url_body_info.filter(item => {
+                const isBlacklisted = this.blacklist.includes(item.domain);
+                const isDuplicate = this.discoveredUrlDomains.includes(item.domain);
+                
+                if (isBlacklisted) {
+                    console.log(`[调试] 内容挖掘域名被黑名单过滤: ${item.domain}`);
+                }
+                if (isDuplicate) {
+                    console.log(`[调试] 内容挖掘域名重复: ${item.domain}`);
+                }
+                
+                return !isBlacklisted && !isDuplicate;
+            });
+            
+            console.log(`[调试] 有效内容挖掘域名数量: ${result.length}`);
+            return result;
+        },
+        
+        // 计算属性：有效的内容挖掘数量
+        validContentMiningCount() {
+            const count = this.validContentMiningDomains.length;
+            console.log(`[调试] 内容挖掘总数: ${count}`);
+            return count;
+        }
+    },
+    watch: {
+        currentLayer() {
+            // 切换层时重置分页和过滤器
+            this.urlCurrentPage = 1;
+            this.expandUrlCurrentPage = 1;
+            this.activeFilter = null;
+        },
+        activeTab(newVal) {
+            // 标签页切换时的逻辑处理
+            if (newVal === 'status') {
+                this.startStatusPolling();
+            } else {
+                this.stopStatusPolling();
+            }
+            
+            // 切换到日志标签页时刷新日志
+            if (newVal === 'logs') {
+                this.loadScanLogs();
+            }
+            
+            // 切换到原始数据标签页时加载原始数据
+            if (newVal === 'rawdata') {
+                this.loadRawData();
+            }
+        }
+    },
+    mounted() {
+        this.activeMenu = 'domains';
+        
+        // 验证域名参数有效性
+        if (!this.domain || this.domain === 'undefined' || this.domain === 'None') {
+            console.error('域名参数无效:', this.domain);
+            this.$message.error('域名参数无效，请重新访问');
+            // 重定向到首页
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+            return;
+        }
+        
+        console.log('正在加载域名数据:', this.domain);
+        
+        // 优化加载顺序：先加载黑名单，再加载域名数据和原始数据
+        this.loadBlacklist().then(() => {
+            console.log('黑名单加载完成，开始加载域名数据');
+            return this.loadDomainData();
+        }).then(() => {
+            this.checkExpandDomainsStatus();
+            console.log('域名数据加载完成，开始加载原始数据');
+            return this.loadRawData();
+        }).catch(error => {
+            console.error('数据加载流程出错:', error);
+        });
+        
+        // 初始加载日志、扫描状态
+        this.loadScanLogs();
+        this.loadScanStatus();
+        // 合并视图后需要在“显示全部”加载原始数据
+        this.loadRawData();
+        
+        // 🎯 自动加载现有IP扫描结果
+        this.loadExistingIpScanResults();
+    },
+    beforeDestroy() {
+        this.stopStatusPolling();
+        // 清理日志定时器
+        if (this.logPollingInterval) {
+            clearInterval(this.logPollingInterval);
+            this.logPollingInterval = null;
+        }
+    },
+    methods: {
+        async loadDomainData() {
+            // 验证域名参数
+            if (!this.domain || this.domain === 'undefined' || this.domain === 'None') {
+                console.error('loadDomainData: 域名参数无效:', this.domain);
+                this.loading = false;
+                return Promise.reject(new Error('域名参数无效'));
+            }
+            
+            this.loading = true;
+            try {
+                const response = await this.$axios.get(`/api/domain/${this.domain}/detail`);
+                console.log('API响应:', response.data);
+                if (response.data.status === 'success' && response.data.data) {
+                this.domainData = response.data.data;
+                    console.log('加载的域名数据:', this.domainData);
+                    console.log('层级数据:', Object.keys(this.domainData.layers || {}));
+                    return Promise.resolve();
+                } else {
+                    console.error('API响应格式错误:', response.data);
+                    this.$message.error('域名数据格式错误');
+                    return Promise.reject(new Error('域名数据格式错误'));
+                }
+            } catch (error) {
+                this.$message.error('加载域名数据失败');
+                console.error('API请求失败:', error);
+                return Promise.reject(error);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        // 日志相关方法
+        async loadScanLogs() {
+            // 验证域名参数
+            if (!this.domain || this.domain === 'undefined' || this.domain === 'None') {
+                console.error('loadScanLogs: 域名参数无效:', this.domain);
+                return;
+            }
+            
+            try {
+                const response = await this.$axios.get(`/api/domain/${this.domain}/logs`);
+                if (response.data.status === 'success') {
+                    this.scanLogs = response.data.data || [];
+                    console.log('加载日志:', this.scanLogs.length, '条');
+                }
+            } catch (error) {
+                console.error('加载扫描日志失败:', error);
+            }
+        },
+        
+        // 加载原始数据
+        async loadRawData() {
+            if (!this.domain) return;
+            
+            try {
+                const response = await this.$axios.get(`/api/domain/${this.domain}/rawdata`);
+                if (response.data.status === 'success') {
+                    this.rawDataFiles = response.data.data;
+                    console.log('原始数据加载成功:', this.rawDataFiles);
+                } else {
+                    console.error('加载原始数据失败:', response.data.message);
+                }
+            } catch (error) {
+                console.error('加载原始数据失败:', error);
+                this.$message.error('加载原始数据失败');
+            }
+        },
+        
+        // 加载扫描状态
+        async loadScanStatus() {
+            // 验证域名参数
+            if (!this.domain || this.domain === 'undefined' || this.domain === 'None') {
+                console.error('loadScanStatus: 域名参数无效:', this.domain);
+                return;
+            }
+            
+            try {
+                const response = await this.$axios.get(`/api/scan/status/${this.domain}`);
+                if (response.data.status === 'success' && response.data.data) {
+                    this.scanStatus = response.data.data;
+                    console.log('扫描状态已加载:', this.scanStatus);
+                } else {
+                    console.log('获取扫描状态失败:', response.data.message);
+                    this.scanStatus = null;
+                }
+            } catch (error) {
+                console.error('加载扫描状态失败:', error);
+                this.scanStatus = null;
+            }
+        },
+        
+        refreshLogs() {
+            this.loadScanLogs();
+        },
+        
+        toggleAutoRefresh() {
+            this.autoRefreshLogs = !this.autoRefreshLogs;
+            if (this.autoRefreshLogs) {
+                this.startLogPolling();
+            } else {
+                this.stopLogPolling();
+            }
+        },
+        
+        startLogPolling() {
+            if (this.logPollingInterval) return;
+            this.logPollingInterval = setInterval(() => {
+                this.loadScanLogs();
+            }, 2000); // 每2秒刷新一次
+        },
+        
+        stopLogPolling() {
+            if (this.logPollingInterval) {
+                clearInterval(this.logPollingInterval);
+                this.logPollingInterval = null;
+            }
+        },
+        
+        clearLogDisplay() {
+            this.scanLogs = [];
+        },
+        
+        showAllLogs() {
+            this.showAllLogsFlag = !this.showAllLogsFlag;
+        },
+        
+        formatLogTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString();
+        },
+        
+
+        
+        getSeverityType(severity) {
+            const map = {
+                'high': 'danger',
+                'medium': 'warning',
+                'low': 'success',
+                'info': 'info'
+            };
+            return map[severity] || 'info';
+        },
+        
+        formatFscanResults(results) {
+            // 格式化fscan结果，处理已有的HTML标签和高亮显示
+            let formatted = results.join('\n');
+            
+            // 先清理所有HTML标签和属性
+            formatted = formatted.replace(/<[^>]+>/g, '');
+            formatted = formatted.replace(/style="[^"]*">/g, '');
+            
+            // 修复错误的 http:// 格式
+            formatted = formatted.replace(/http:\/\/\s+/g, 'http://');
+            formatted = formatted.replace(/https:\/\/\s+/g, 'https://');
+            
+            // 高亮IP地址（但不在URL中的）
+            formatted = formatted.replace(/^([\s\S]*?)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?/gm, 
+                function(match, prefix, ip, port) {
+                    if (prefix.includes('http://') || prefix.includes('https://')) {
+                        return match;
+                    }
+                    return prefix + '<span style="color: #67C23A; font-weight: bold;">' + ip + '</span>' + (port || '');
+                });
+            
+            // 高亮端口号
+            formatted = formatted.replace(/:(\d+)\s+(open)/g, 
+                ':<span style="color: #E6A23C; font-weight: bold;">$1</span> <span style="color: #67C23A; font-weight: bold;">$2</span>');
+            
+            // 高亮URL
+            formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, 
+                '<a href="$1" target="_blank" style="color: #409EFF;">$1</a>');
+            
+            // 高亮服务名称
+            formatted = formatted.replace(/\[(.+?)\]/g, 
+                '<span style="color: #F56C6C;">[</span><span style="color: #fff; font-weight: bold;">$1</span><span style="color: #F56C6C;">]</span>');
+            
+            // 高亮关键信息
+            formatted = formatted.replace(/\b(WebTitle|InfoScan|code:|len:|title:)\b/g, 
+                '<span style="color: #909399; font-weight: bold;">$1</span>');
+            
+            return formatted;
+        },
+        
+        formatSize(size) {
+            if (!size || size === 0) return '-';
+            if (size < 1024) return size + ' B';
+            if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+            return (size / (1024 * 1024)).toFixed(1) + ' MB';
+        },
+        
+        handleUrlPageChange(page) {
+            this.urlCurrentPage = page;
+        },
+        
+        handleUrlSizeChange(size) {
+            this.urlPageSize = size;
+            this.urlCurrentPage = 1;  // 重置到第一页
+        },
+        
+        handleExpandUrlPageChange(page) {
+            this.expandUrlCurrentPage = page;
+        },
+        
+        handleExpandUrlSizeChange(size) {
+            this.expandUrlPageSize = size;
+            this.expandUrlCurrentPage = 1;
+        },
+        
+        // 🎯 移除重复的filterContent方法，避免冲突
+        
+        async scanExpandDomain(domain) {
+            this.$confirm(`确定要扫描域名 ${domain} 吗？`, '确认扫描', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'info'
+            }).then(async () => {
+                try {
+                    const response = await this.$axios.post('/api/scan', {
+                        domain: domain,
+                        mode: '1'  // 默认使用快速扫描
+                    });
+                    
+                    if (response.data.status === 'success') {
+                        this.$message.success(response.data.message);
+                    } else {
+                        this.$message.warning(response.data.message);
+                    }
+                } catch (error) {
+                    if (error.response && error.response.status === 409) {
+                        this.$message.warning(error.response.data.message);
+                    } else {
+                        this.$message.error('启动扫描失败：' + (error.response?.data?.message || error.message));
+                    }
+                }
+            }).catch(() => {
+                // 用户取消
+            });
+        },
+        
+        // 扫描状态相关方法
+        async loadScanStatus() {
+            try {
+                const response = await this.$axios.get(`/api/scan/status/${this.domain}`);
+                if (response.data.status === 'success' && response.data.data) {
+                    this.scanStatus = response.data.data;
+                } else if (response.data.status === 'not_found') {
+                    this.scanStatus = null;
+                } else {
+                    // 兼容旧版本响应
+                    if (response.data.status === 'completed' || response.data.status === 'running') {
+                        this.scanStatus = {
+                            status: response.data.status,
+                            message: response.data.message,
+                            stats: response.data.stats,
+                            has_partial_results: response.data.has_partial_results
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('加载扫描状态失败:', error);
+            }
+        },
+        
+        startStatusPolling() {
+            // 立即加载一次
+            this.loadScanStatus();
+            
+            // 开始轮询（每2秒）
+            this.statusPollingInterval = setInterval(() => {
+                this.loadScanStatus();
+            }, 2000);
+        },
+        
+        stopStatusPolling() {
+            if (this.statusPollingInterval) {
+                clearInterval(this.statusPollingInterval);
+                this.statusPollingInterval = null;
+            }
+        },
+        
+        getScanStatusType() {
+            if (!this.scanStatus) return 'info';
+            if (this.scanStatus.scan_completed) return 'success';
+            if (this.scanStatus.errors && this.scanStatus.errors.length > 0) return 'danger';
+            return 'primary';
+        },
+        
+        getScanStatusText() {
+            if (!this.scanStatus) return '未开始';
+            if (this.scanStatus.scan_completed) return '扫描完成';
+            if (this.scanStatus.current_stage) return '扫描中';
+            return '准备中';
+        },
+        
+        getStageLabel(stage) {
+            const labels = {
+                'subdomain_discovery': '子域名发现',
+                'http_probe': 'HTTP探测',
+                'port_scan': '端口扫描',
+                'vulnerability_scan': '漏洞扫描',
+                'expand_scan': '扩展资产扫描',
+                'report_generation': '报告生成'
+            };
+            return labels[stage] || stage;
+        },
+        
+        getStageIcon(stage) {
+            const icons = {
+                'subdomain_discovery': 'fas fa-search',
+                'http_probe': 'fas fa-globe',
+                'port_scan': 'fas fa-network-wired',
+                'vulnerability_scan': 'fas fa-bug',
+                'expand_scan': 'fas fa-expand-arrows-alt',
+                'report_generation': 'fas fa-file-alt'
+            };
+            return icons[stage] || 'fas fa-tasks';
+        },
+        
+        getStageColor(status) {
+            const colors = {
+                'pending': '#909399',
+                'in_progress': '#409EFF',
+                'completed': '#67C23A',
+                'failed': '#F56C6C'
+            };
+            return colors[status] || '#909399';
+        },
+        
+        getStageTagType(status) {
+            const types = {
+                'pending': 'info',
+                'in_progress': 'primary',
+                'completed': 'success',
+                'failed': 'danger'
+            };
+            return types[status] || 'info';
+        },
+        
+        getStageStatusText(status) {
+            const texts = {
+                'pending': '等待中',
+                'in_progress': '进行中',
+                'completed': '已完成',
+                'failed': '失败'
+            };
+            return texts[status] || status;
+        },
+        
+        // 检查扩展域名的扫描状态
+        async checkExpandDomainsStatus() {
+            const allExpandDomains = new Set();
+            
+            // 收集所有扩展域名
+            Object.values(this.domainData.layers).forEach(layer => {
+                if (layer.expand_domains) {
+                    layer.expand_domains.forEach(domain => {
+                        allExpandDomains.add(domain);
+                    });
+                }
+            });
+            
+            // 检查每个扩展域名的状态
+            for (const domain of allExpandDomains) {
+                try {
+                    // 先检查是否存在该域名的扫描结果
+                    const response = await this.$axios.get(`/api/domain/${domain}/summary`);
+                    if (response.data.status === 'success') {
+                        // 域名已存在，再检查是否在扫描中
+                        const statusResponse = await this.$axios.get(`/api/scan/status/${domain}`);
+                        if (statusResponse.data.status === 'success' && statusResponse.data.data) {
+                            const scanData = statusResponse.data.data;
+                            if (scanData.scan_completed === false && scanData.current_stage) {
+                                this.$set(this.expandDomainStatus, domain, 'scanning');
+                            } else {
+                                this.$set(this.expandDomainStatus, domain, 'completed');
+                            }
+                        } else if (statusResponse.data.status === 'running') {
+                            this.$set(this.expandDomainStatus, domain, 'scanning');
+                        } else if (statusResponse.data.status === 'not_found') {
+                            // 域名存在但没有扫描状态，未扫描
+                            this.$set(this.expandDomainStatus, domain, 'not_scanned');
+                        } else {
+                            // 其他情况，可能是扫描完成但状态信息异常
+                            this.$set(this.expandDomainStatus, domain, 'completed');
+                        }
+                    } else {
+                        // 域名不存在，未扫描
+                        this.$set(this.expandDomainStatus, domain, 'not_scanned');
+                    }
+                } catch (error) {
+                    // 出错认为未扫描
+                    console.log(`检查域名 ${domain} 状态时出错:`, error.response?.status, error.response?.data);
+                    this.$set(this.expandDomainStatus, domain, 'not_scanned');
+                }
+            }
+        },
+        
+        // 处理扩展域名点击
+        handleExpandDomainClick(domain) {
+            const status = this.expandDomainStatus[domain];
+            if (status === 'completed' || status === 'scanning') {
+                // 已扫描或扫描中，跳转到详情页
+                window.location.href = `/domain/${domain}`;
+            }
+            // 否则不做任何操作，让扫描按钮处理
+        },
+        
+        // 获取扩展域名的标签类型
+        getExpandDomainType(domain) {
+            const status = this.expandDomainStatus[domain];
+            switch(status) {
+                case 'completed': return 'success';
+                case 'scanning': return 'warning';
+                default: return 'info';
+            }
+        },
+        
+        // 获取扩展域名的样式
+        getExpandDomainStyle(domain) {
+            const status = this.expandDomainStatus[domain];
+            let style = 'cursor: pointer; transition: all 0.3s ease;';
+            
+            switch(status) {
+                case 'completed':
+                    style += 'background-color: var(--success-bg); border-color: var(--success-color);';
+                    break;
+                case 'scanning':
+                    style += 'background-color: var(--warning-bg); border-color: var(--warning-color);';
+                    break;
+                default:
+                    style += 'background-color: var(--info-bg); border-color: var(--info-color);';
+            }
+            
+            return style;
+        },
+        
+        // 打开域名详情页面
+        openDomainDetail(domain) {
+            window.open(`/domain/${domain}`, '_blank');
+        },
+        
+        // 日志相关方法
+        async loadScanLogs() {
+            try {
+                const response = await this.$axios.get(`/api/domain/${this.domain}/logs`);
+                if (response.data.status === 'success') {
+                    this.scanLogs = response.data.data || [];
+                    // 自动滚动到底部显示最新日志
+                    this.$nextTick(() => {
+                        const logContainer = document.querySelector('.log-container');
+                        if (logContainer) {
+                            logContainer.scrollTop = logContainer.scrollHeight;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('加载扫描日志失败:', error);
+            }
+        },
+        
+        refreshLogs() {
+            this.loadScanLogs();
+            this.$message.success('日志已刷新');
+        },
+        
+        toggleAutoRefresh() {
+            this.autoRefreshLogs = !this.autoRefreshLogs;
+            
+            if (this.autoRefreshLogs) {
+                // 开启自动刷新，每3秒刷新一次
+                this.logPollingInterval = setInterval(() => {
+                    this.loadScanLogs();
+                }, 3000);
+                this.$message.success('已开启自动刷新日志');
+            } else {
+                // 关闭自动刷新
+                if (this.logPollingInterval) {
+                    clearInterval(this.logPollingInterval);
+                    this.logPollingInterval = null;
+                }
+                this.$message.info('已停止自动刷新日志');
+            }
+        },
+        
+        clearLogDisplay() {
+            this.scanLogs = [];
+            this.$message.success('日志显示已清空');
+        },
+        
+        showAllLogs() {
+            this.showAllLogsFlag = true;
+        },
+        
+        formatLogTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('zh-CN', { 
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        },
+        
+        getLogLineClass(log) {
+            // 安全检查：确保log和log.content存在
+            if (!log || !log.content || typeof log.content !== 'string') {
+                return 'info-log';
+            }
+            
+            const content = log.content.toLowerCase();
+            if (content.includes('error') || content.includes('失败') || content.includes('[!]')) {
+                return 'error-log';
+            } else if (content.includes('warning') || content.includes('警告') || content.includes('[*]')) {
+                return 'warning-log';
+            } else if (content.includes('success') || content.includes('完成') || content.includes('[+]') || content.includes('[✓]')) {
+                return 'success-log';
+            }
+            return 'info-log';
+        },
+        
+        // 扫描状态辅助方法
+        getScanStatusType() {
+            if (!this.scanStatus) return 'info';
+            if (this.scanStatus.scan_completed) return 'success';
+            if (this.scanStatus.current_stage === 'failed') return 'danger';
+            return 'warning';
+        },
+        
+        getScanStatusText() {
+            if (!this.scanStatus) return '未知状态';
+            if (this.scanStatus.scan_completed) return '扫描完成';
+            if (this.scanStatus.current_stage === 'failed') return '扫描失败';
+            return '扫描中';
+        },
+        
+
+        
+        // 标签过滤功能
+        filterContent(type) {
+            if (type === 'all') {
+                this.activeFilter = null;
+            } else {
+                this.activeFilter = type;
+            }
+            
+            // 重置分页
+            this.urlCurrentPage = 1;
+            this.expandUrlCurrentPage = 1;
+        },
+        
+        // 标签显示控制逻辑 - 企业级稳定版本
+        shouldShowTab(tabName) {
+            // 确保所有核心标签始终显示，提高稳定性
+            console.log(`检查标签显示: ${tabName} - 总是显示`);
+            return true;
+        },
+        
+        // 加载原始数据
+        async loadRawData() {
+            if (!this.domain) {
+                return Promise.resolve();
+            }
+            
+            try {
+                const response = await this.$axios.get(`/api/domain/${this.domain}/rawdata`);
+                if (response.data.status === 'success') {
+                    this.rawDataFiles = response.data.data;
+                    console.log('原始数据加载成功:', this.rawDataFiles);
+                    
+                    // 提取已发现的URL域名
+                    this.extractDiscoveredUrlDomains();
+                    
+                    // 检测并处理重复域名
+                    this.detectAndHandleDuplicateDomains();
+                    
+                    // 重新处理黑名单过滤（使用独立方法便于调试）
+                    this.reprocessBlacklistFiltering();
+                    
+                    return Promise.resolve();
+                } else {
+                    console.error('加载原始数据响应错误:', response.data);
+                    return Promise.reject(new Error('原始数据格式错误'));
+                }
+            } catch (error) {
+                console.error('加载原始数据失败:', error);
+                this.$message.error('加载原始数据失败');
+                return Promise.reject(error);
+            }
+        },
+        
+        // 扫描指定域名
+        async scanDomain(targetDomain) {
+            if (!targetDomain) {
+                this.$message.warning('请提供有效的扫描目标');
+                return;
+            }
+
+            // 🎯 系统构建大师：智能判断目标类型 - IP扫描和域名扫描分流
+            if (this.isIpAddress(targetDomain)) {
+                console.log(`[智能扫描] 检测到IP地址，启动IP端口扫描: ${targetDomain}`);
+                await this.scanIpAddress(targetDomain); // 调用IP扫描方法
+                return;
+            }
+            
+            console.log(`[智能扫描] 检测到域名，启动子域名扫描: ${targetDomain}`);
+            
+            try {
+                // 弹出确认对话框
+                await this.$confirm(
+                    `确定要扫描域名 ${targetDomain} 吗？这将启动一个新的子域名扫描任务。`,
+                    '确认域名扫描',
+                    {
+                        confirmButtonText: '确定扫描',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }
+                );
+                
+                // 显示加载提示
+                const loading = this.$loading({
+                    lock: true,
+                    text: `正在启动子域名扫描任务: ${targetDomain}...`,
+                    spinner: 'el-icon-loading',
+                    background: 'rgba(0, 0, 0, 0.7)'
+                });
+                
+                const response = await this.$axios.post(`/api/domain/${this.domain}/scan`, {
+                    domain: targetDomain,
+                    mode: '1'  // 默认1层扫描
+                });
+                
+                loading.close();
+                
+                if (response.data.status === 'success') {
+                    this.$message.success(response.data.message);
+                    console.log('域名扫描启动成功:', response.data);
+                } else {
+                    this.$message.error(response.data.message || '启动域名扫描失败');
+                }
+            } catch (error) {
+                console.error('域名扫描启动失败:', error);
+                if (error.response && error.response.data && error.response.data.message) {
+                    this.$message.error(error.response.data.message);
+                } else {
+                    this.$message.error('启动域名扫描失败');
+                }
+            }
+        },
+        
+        // 添加到黑名单
+        async addToBlacklist(targetDomain) {
+            if (!targetDomain) {
+                this.$message.warning('请提供有效的域名');
+                return;
+            }
+            
+            try {
+                // 弹出确认对话框
+                await this.$confirm(
+                    `确定要将域名 ${targetDomain} 添加到黑名单吗？添加后该域名将无法被扫描。`,
+                    '确认添加黑名单',
+                    {
+                        confirmButtonText: '确定添加',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }
+                );
+                
+                const response = await this.$axios.post(`/api/domain/${this.domain}/blacklist`, {
+                    domain: targetDomain
+                });
+                
+                if (response.data.status === 'success') {
+                    this.$message.success(response.data.message);
+                    console.log('添加黑名单成功:', response.data);
+                } else if (response.data.status === 'warning') {
+                    this.$message.warning(response.data.message);
+                } else {
+                    this.$message.error(response.data.message || '添加黑名单失败');
+                }
+            } catch (error) {
+                console.error('添加黑名单失败:', error);
+                if (error.response && error.response.data && error.response.data.message) {
+                    this.$message.error(error.response.data.message);
+                } else {
+                    this.$message.error('添加黑名单失败');
+                }
+            }
+        },
+        
+        // 格式化文件大小
+        formatSize(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        },
+        
+        // 移除域名从黑名单
+        async removeFromBlacklist(targetDomain) {
+            if (!targetDomain) {
+                this.$message.warning('请提供有效的域名');
+                return;
+            }
+            
+            try {
+                await this.$confirm(
+                    `确定要将域名 ${targetDomain} 从黑名单中移除吗？`,
+                    '确认移除黑名单',
+                    {
+                        confirmButtonText: '确定移除',
+                        cancelButtonText: '取消',
+                        type: 'info'
+                    }
+                );
+                
+                const response = await this.$axios.post(`/api/domain/${this.domain}/blacklist/remove`, {
+                    domain: targetDomain
+                });
+                
+                if (response.data.status === 'success') {
+                    this.$message.success(response.data.message);
+                    console.log('移除黑名单成功:', response.data);
+                    // 重新加载黑名单和相关数据
+                    await this.refreshAllData();
+                } else if (response.data.status === 'warning') {
+                    this.$message.warning(response.data.message);
+                } else {
+                    this.$message.error(response.data.message || '移除黑名单失败');
+                }
+            } catch (error) {
+                if (error === 'cancel') {
+                    return; // 用户取消操作
+                }
+                console.error('移除黑名单失败:', error);
+                if (error.response && error.response.data && error.response.data.message) {
+                    this.$message.error(error.response.data.message);
+                } else {
+                    this.$message.error('移除黑名单失败');
+                }
+            }
+        },
+        
+        // 加载黑名单
+        async loadBlacklist() {
+            if (!this.domain) {
+                console.log('域名为空，跳过黑名单加载');
+                return Promise.resolve();
+            }
+            
+            try {
+                const response = await this.$axios.get(`/api/domain/${this.domain}/blacklist`);
+                if (response.data.status === 'success') {
+                    this.blacklist = response.data.data || [];
+                    console.log('黑名单加载成功:', this.blacklist);
+                    console.log('黑名单域名数量:', this.blacklist.length);
+                } else {
+                    console.log('黑名单加载响应:', response.data);
+                    this.blacklist = [];
+                }
+                return Promise.resolve();
+            } catch (error) {
+                console.error('加载黑名单失败:', error);
+                // 如果API不存在或失败，初始化空黑名单
+                this.blacklist = [];
+                return Promise.resolve(); // 即使失败也要继续后续流程
+            }
+        },
+        
+        // 重新处理黑名单过滤（独立方法，便于调试）
+        reprocessBlacklistFiltering() {
+            console.log('重新处理黑名单过滤，黑名单:', this.blacklist);
+            
+            // 清空之前的黑名单显示数据
+            this.blacklistedFofaDomains = [];
+            this.blacklistedContentDomains = [];
+            
+            if (!this.blacklist.length) {
+                console.log('黑名单为空，跳过过滤');
+                return;
+            }
+            
+            // 直接从原始数据中查找黑名单域名并添加到黑名单显示区域
+            this.collectBlacklistedDomainsFromRawData();
+            
+            console.log('黑名单过滤完成，黑名单域名分布:', {
+                fofa: this.blacklistedFofaDomains,
+                content: this.blacklistedContentDomains,
+                total: this.filteredBlacklistedDomains.length
+            });
+        },
+        
+        // 从原始数据中收集黑名单域名（不修改原始数据，只收集显示）
+        collectBlacklistedDomainsFromRawData() {
+            console.log('开始收集黑名单域名用于显示:', this.blacklist);
+            
+            // 收集 FOFA 中的黑名单域名
+            if (this.rawDataFiles.fofa_data && this.rawDataFiles.fofa_data.length) {
+                this.rawDataFiles.fofa_data.forEach(fofa => {
+                    fofa.domains.forEach(item => {
+                        const domain = this.extractDomain(item.url || item);
+                        const isBlacklisted = this.blacklist.includes(domain);
+                        
+                        if (isBlacklisted) {
+                            console.log('FOFA中发现黑名单域名:', domain);
+                            if (!this.blacklistedFofaDomains.includes(domain)) {
+                                this.blacklistedFofaDomains.push(domain);
+                            }
+                        }
+                    });
+                });
+            }
+            
+            // 收集内容挖掘中的黑名单域名
+            if (this.rawDataFiles.url_body_info && this.rawDataFiles.url_body_info.length) {
+                this.rawDataFiles.url_body_info.forEach(item => {
+                    const isBlacklisted = this.blacklist.includes(item.domain);
+                    
+                    if (isBlacklisted) {
+                        console.log('内容挖掘中发现黑名单域名:', item.domain);
+                        if (!this.blacklistedContentDomains.includes(item.domain)) {
+                            this.blacklistedContentDomains.push(item.domain);
+                        }
+                    }
+                });
+            }
+            
+            console.log('黑名单域名收集完成:', {
+                fofa: this.blacklistedFofaDomains,
+                content: this.blacklistedContentDomains,
+                total: this.filteredBlacklistedDomains.length
+            });
+        },
+        
+        // 提取已发现的URL中的域名
+        extractDiscoveredUrlDomains() {
+            this.discoveredUrlDomains = [];
+            
+            // 从各层的URL中提取域名
+            Object.values(this.domainData.layers).forEach(layer => {
+                // 基础扫描发现的URL
+                if (layer.urls && layer.urls.length) {
+                    layer.urls.forEach(urlItem => {
+                        const url = typeof urlItem === 'string' ? urlItem : urlItem.url;
+                        if (url) {
+                            const domain = this.extractDomain(url);
+                            if (domain && !this.discoveredUrlDomains.includes(domain)) {
+                                this.discoveredUrlDomains.push(domain);
+                            }
+                        }
+                    });
+                }
+                
+                // 扩展发现的已扫描URL
+                if (layer.expand_scanned_urls && layer.expand_scanned_urls.length) {
+                    layer.expand_scanned_urls.forEach(urlItem => {
+                        const url = urlItem.url || urlItem;
+                        if (url) {
+                            const domain = this.extractDomain(url);
+                            if (domain && !this.discoveredUrlDomains.includes(domain)) {
+                                this.discoveredUrlDomains.push(domain);
+                            }
+                        }
+                    });
+                }
+            });
+            
+            console.log('已发现的URL域名:', this.discoveredUrlDomains);
+        },
+        
+        // 检测并处理重复域名
+        detectAndHandleDuplicateDomains() {
+            if (!this.discoveredUrlDomains.length) return;
+            
+            // 处理FOFA发现的重复域名
+            if (this.rawDataFiles.fofa_data && this.rawDataFiles.fofa_data.length) {
+                this.rawDataFiles.fofa_data.forEach(fofa => {
+                    const originalDomains = [...fofa.domains];
+                    fofa.domains = fofa.domains.filter(item => {
+                        const domain = this.extractDomain(item.url || item);
+                        const isDuplicate = this.discoveredUrlDomains.includes(domain);
+                        
+                        if (isDuplicate && !this.duplicateFofaDomains.includes(domain)) {
+                            this.duplicateFofaDomains.push(domain);
+                            console.log('检测到FOFA重复域名:', domain);
+                        }
+                        
+                        return !isDuplicate;
+                    });
+                });
+            }
+            
+            // 处理内容挖掘发现的重复域名
+            if (this.rawDataFiles.url_body_info && this.rawDataFiles.url_body_info.length) {
+                const originalContentInfo = [...this.rawDataFiles.url_body_info];
+                this.rawDataFiles.url_body_info = this.rawDataFiles.url_body_info.filter(item => {
+                    const isDuplicate = this.discoveredUrlDomains.includes(item.domain);
+                    
+                    if (isDuplicate && !this.duplicateContentDomains.includes(item.domain)) {
+                        this.duplicateContentDomains.push(item.domain);
+                        console.log('检测到内容挖掘重复域名:', item.domain);
+                    }
+                    
+                    return !isDuplicate;
+                });
+            }
+            
+            // 处理base_info中的重复网站信息
+            this.extractDuplicateDomainsFromBaseInfo();
+            
+            console.log('重复域名检测完成:', {
+                fofa: this.duplicateFofaDomains.length,
+                content: this.duplicateContentDomains.length,
+                base: this.duplicateBaseDomains.length
+            });
+        },
+        
+        // 从base_info中提取重复网站信息
+        extractDuplicateDomainsFromBaseInfo() {
+            if (!this.rawDataFiles.basic_info) return;
+            
+            const basicInfo = this.rawDataFiles.basic_info;
+            
+            // 查找重复网站部分
+            const duplicateSection = basicInfo.match(/重复网站[\s\S]*?(?=\n\n|$)/g);
+            
+            if (duplicateSection && duplicateSection.length > 0) {
+                const duplicateText = duplicateSection[0];
+                
+                // 提取域名 (简单的正则匹配)
+                const domainMatches = duplicateText.match(/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+                
+                if (domainMatches) {
+                    domainMatches.forEach(domain => {
+                        // 过滤掉明显不是域名的内容
+                        if (domain && 
+                            !domain.startsWith('.') && 
+                            !domain.endsWith('.') &&
+                            domain.includes('.') &&
+                            this.discoveredUrlDomains.includes(domain) &&
+                            !this.duplicateBaseDomains.includes(domain)) {
+                            this.duplicateBaseDomains.push(domain);
+                            console.log('检测到base_info重复域名:', domain);
+                        }
+                    });
+                }
+            }
+        },
+        
+        // 红队功能增强方法
+        
+        // 计算FOFA发现的总数
+        getFofaTotalCount() {
+            let total = 0;
+            if (this.rawDataFiles.fofa_data && this.rawDataFiles.fofa_data.length) {
+                this.rawDataFiles.fofa_data.forEach(fofa => {
+                    total += (fofa.domains || []).length;
+                });
+            }
+            return total;
+        },
+        
+        // 处理FOFA域名点击
+        handleFofaDomainClick(item) {
+            const url = item.url || item;
+            this.openUrl(url);
+        },
+        
+        // 从 URL 中提取域名
+        extractDomain(url) {
+            if (!url) return '';
+            try {
+                // 如果不是URL格式，直接返回
+                if (!url.includes('://')) {
+                    return url;
+                }
+                const urlObj = new URL(url);
+                return urlObj.hostname;
+            } catch (error) {
+                // 解析失败，尝试简单提取
+                const match = url.match(/:\/\/([^\/]+)/);
+                return match ? match[1] : url;
+            }
+        },
+        
+        // 🎯 系统构建大师：智能域名规范化系统
+        normalizeDomain(domain) {
+            if (!domain) return '';
+            
+            // 去除www前缀，将www.example.com和example.com视为相同
+            const normalizedDomain = domain.toLowerCase().replace(/^www\./, '');
+            
+            console.log(`[智能规范化] ${domain} -> ${normalizedDomain}`);
+            return normalizedDomain;
+        },
+        
+        // 检查两个域名是否为同一主域
+        isSameDomain(domain1, domain2) {
+            const norm1 = this.normalizeDomain(domain1);
+            const norm2 = this.normalizeDomain(domain2);
+            const isSame = norm1 === norm2;
+            
+            if (isSame && domain1 !== domain2) {
+                console.log(`[智能检测] 主域重复: ${domain1} ↔ ${domain2}`);
+            }
+            
+            return isSame;
+        },
+        
+        // 检测IP地址
+        isIpAddress(domain) {
+            const ipRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+            return ipRegex.test(domain);
+        },
+        
+        // 获取域名类型（用于不同处理策略）
+        getDomainType(domain) {
+            if (this.isIpAddress(domain)) {
+                return 'ip_address';
+            }
+            if (domain.startsWith('www.')) {
+                return 'www_subdomain';
+            }
+            if (domain.includes('.') && domain.split('.').length > 2) {
+                return 'subdomain';
+            }
+            return 'main_domain';
+        },
+        
+        // 打开URL
+        openUrl(url) {
+            if (!url) return;
+            
+            // 确保 URL 有协议
+            let fullUrl = url;
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                fullUrl = 'http://' + url;
+            }
+            
+            window.open(fullUrl, '_blank');
+        },
+        
+        // 🎯 IP地址独立扫描系统 - 系统构建大师架构
+        async scanIpAddress(ipAddress) {
+            if (!ipAddress || !this.isIpAddress(ipAddress)) {
+                this.$message.warning('无效的IP地址');
+                return;
+            }
+            
+            try {
+                // 显示端口范围选择对话框
+                const portRange = await this.showPortRangeDialog();
+                if (!portRange) {
+                    return; // 用户取消
+                }
+                
+                this.$message({
+                    message: `正在启动IP地址 ${ipAddress} 的端口扫描 (${portRange})...`,
+                    type: 'info',
+                    duration: 3000
+                });
+                
+                // 初始化IP扫描状态
+                if (!this.ipScanResults[ipAddress]) {
+                    this.$set(this.ipScanResults, ipAddress, {
+                        status: '扫描中',
+                        startTime: new Date().toLocaleString(),
+                        ports: [],
+                        services: [],
+                        progress: 0,
+                        portRange: portRange
+                    });
+                }
+                
+                console.log(`[IP扫描] 启动端口扫描: ${ipAddress}, 端口范围: ${portRange}`);
+                
+                // 调用独立的IP端口扫描API
+                const response = await this.$axios.post(`/api/scan/ip-port`, {
+                    target: ipAddress,
+                    scan_type: 'port_scan',
+                    ports: portRange,
+                    domain: this.domain // 关联域名
+                });
+                
+                if (response.data.status === 'success') {
+                    this.$message.success(`IP地址 ${ipAddress} 端口扫描已启动`);
+                    
+                    // 启动IP扫描状态轮询
+                    this.startIpScanPolling(ipAddress);
+                } else {
+                    throw new Error(response.data.message || '启动IP扫描失败');
+                }
+                
+            } catch (error) {
+                console.error('[IP扫描] 启动失败:', error);
+                
+                // 🎯 处理409冲突：已有扫描结果
+                if (error.response && error.response.status === 409) {
+                    const errorData = error.response.data;
+                    if (errorData.scan_completed) {
+                        // 已有扫描结果，提示用户并切换到IP资产标签页
+                        this.$message({
+                            message: errorData.message,
+                            type: 'warning',
+                            duration: 5000
+                        });
+                        
+                        // 已移除IP资产独立标签页，保持在当前“扫描结果”页展示
+                        await this.loadExistingIpScanResults();
+                        
+                        return;
+                    }
+                }
+                
+                this.$message.error(`IP扫描失败: ${error.response?.data?.message || error.message}`);
+                
+                // 更新错误状态
+                if (this.ipScanResults[ipAddress]) {
+                    this.ipScanResults[ipAddress].status = '扫描失败';
+                }
+            }
+        },
+        
+        // 显示端口范围选择对话框
+        async showPortRangeDialog() {
+            return new Promise((resolve) => {
+                this.$msgbox({
+                    title: '选择扫描端口范围',
+                    message: this.$createElement('div', [
+                        this.$createElement('p', '请选择要扫描的端口范围：'),
+                        this.$createElement('el-radio-group', {
+                            props: {
+                                value: 'all'
+                            },
+                            on: {
+                                input: (val) => {
+                                    this.selectedPortRange = val;
+                                }
+                            }
+                        }, [
+                            this.$createElement('el-radio', { props: { label: 'all' } }, '🎯 全端口扫描 (1-65535) 【推荐】'),
+                            this.$createElement('br'),
+                            this.$createElement('el-radio', { props: { label: 'common' } }, '常用端口 (快速扫描)'),
+                            this.$createElement('br'),
+                            this.$createElement('el-radio', { props: { label: 'web' } }, 'Web服务端口 (80,443,8080等)'),
+                            this.$createElement('br'),
+                            this.$createElement('el-radio', { props: { label: 'database' } }, '数据库端口 (3306,5432等)'),
+                        ])
+                    ]),
+                    showCancelButton: true,
+                    confirmButtonText: '开始扫描',
+                    cancelButtonText: '取消',
+                    beforeClose: (action, instance, done) => {
+                        if (action === 'confirm') {
+                            resolve(this.selectedPortRange || 'common');
+                        } else {
+                            resolve(null);
+                        }
+                        done();
+                    }
+                });
+                // 🎯 默认全端口扫描 - 符合红队渗透测试需求
+                this.selectedPortRange = 'all';
+            });
+        },
+        
+        // IP扫描状态轮询
+        startIpScanPolling(ipAddress) {
+            const pollInterval = setInterval(async () => {
+                try {
+                    const response = await this.$axios.get(`/api/scan/ip-status/${ipAddress}`);
+                    
+                    if (response.data.status === 'success' && response.data.data) {
+                        const scanData = response.data.data;
+                        
+                        // 更新IP扫描结果
+                        this.$set(this.ipScanResults, ipAddress, {
+                            ...scanData,
+                            lastUpdate: new Date().toLocaleString()
+                        });
+                        
+                        console.log(`[IP扫描] 状态更新: ${ipAddress} - ${scanData.status}`);
+                        
+                        // 如果扫描完成，停止轮询
+                        if (scanData.status === '扫描完成' || scanData.status === '扫描失败') {
+                            clearInterval(pollInterval);
+                            
+                            if (scanData.status === '扫描完成') {
+                                this.$message.success(`IP地址 ${ipAddress} 端口扫描完成`);
+                                console.log(`[IP扫描] 完成: ${ipAddress}`, scanData);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('[IP扫描] 状态查询失败:', error);
+                    clearInterval(pollInterval);
+                }
+            }, 2000); // 2秒轮询一次
+        },
+        
+        // 获取IP扫描状态
+        getIpScanStatus(ipAddress) {
+            if (!this.ipScanResults[ipAddress]) {
+                return '未扫描';
+            }
+            
+            const result = this.ipScanResults[ipAddress];
+            if (result.status === '扫描中' && result.progress) {
+                return `扫描中 ${result.progress}%`;
+            }
+            
+            return result.status || '未知状态';
+        },
+        
+        // 获取IP状态对应的标签类型
+        getIpStatusType(status) {
+            const statusMap = {
+                '扫描中': 'warning',
+                '扫描完成': 'success', 
+                '扫描失败': 'danger',
+                '未扫描': 'info'
+            };
+            return statusMap[status] || 'info';
+        },
+        
+        // 获取端口范围描述
+        getPortRangeDesc(portRange) {
+            const rangeMap = {
+                'all': '全端口 (1-65535)',
+                'common': '常用端口',
+                'web': 'Web端口',
+                'database': '数据库端口'
+            };
+            return rangeMap[portRange] || portRange;
+        },
+        
+        // 🎯 加载现有IP扫描结果 - 页面初始化时调用
+        async loadExistingIpScanResults() {
+            try {
+                console.log('[IP扫描] 正在加载现有IP扫描结果...');
+                
+                // 获取所有IP扫描状态
+                const response = await this.$axios.get('/api/scan/ip-status-all', {
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                
+                if (response.data.status === 'success') {
+                    const allIpStatus = response.data.data;
+                    console.log('[IP扫描] 发现现有IP扫描结果:', allIpStatus);
+                    
+                    // 清空现有数据
+                    this.ipScanResults = {};
+                    this.discoveredIpAddresses = [];
+                    
+                    // 加载每个IP的详细结果
+                    for (const [ipAddress, statusInfo] of Object.entries(allIpStatus)) {
+                        this.discoveredIpAddresses.push(ipAddress);
+                        
+                        if (statusInfo.completed) {
+                            // 加载详细扫描结果
+                            try {
+                                const resultResponse = await this.$axios.get(`/api/scan/ip-results/${ipAddress}`, {
+                                    headers: { 'Cache-Control': 'no-cache' }
+                                });
+                                
+                                if (resultResponse.data.status === 'success') {
+                                    const resultData = resultResponse.data.data;
+                                    console.log(`[IP扫描] 加载 ${ipAddress} 详细结果:`, resultData);
+                                    
+                                    this.$set(this.ipScanResults, ipAddress, {
+                                        status: '扫描完成',
+                                        startTime: statusInfo.start_time,
+                                        endTime: statusInfo.end_time,
+                                        ports: resultData.open_ports || [],
+                                        services: resultData.services || [],
+                                        progress: 100,
+                                        portRange: statusInfo.ports || 'all',
+                                        webServices: resultData.web_services || [],
+                                        // 🎯 确保端口数据正确传递
+                                        totalPorts: resultData.open_ports ? resultData.open_ports.length : 0,
+                                        summary: resultData.summary || {}
+                                    });
+                                    
+                                    // 🎯 调试日志：确认端口数据
+                                    console.log(`[IP扫描] ${ipAddress} 端口数据:`, {
+                                        ports: resultData.open_ports,
+                                        count: resultData.open_ports ? resultData.open_ports.length : 0
+                                    });
+                                    
+                                    // 🎯 调试：确认ipScanResults更新
+                                    console.log('🎯 更新后的ipScanResults:', this.ipScanResults);
+                                    console.log('🎯 当前activeFilter:', this.activeFilter);
+                                } else {
+                                    console.warn(`[IP扫描] 无法加载 ${ipAddress} 详细结果`);
+                                }
+                            } catch (error) {
+                                console.warn(`[IP扫描] 加载 ${ipAddress} 结果失败:`, error);
+                            }
+                        } else {
+                            // 正在扫描中
+                            this.$set(this.ipScanResults, ipAddress, {
+                                status: statusInfo.status || '扫描中',
+                                startTime: statusInfo.start_time,
+                                ports: [],
+                                services: [],
+                                progress: statusInfo.progress || 0,
+                                portRange: statusInfo.ports || 'all'
+                            });
+                            
+                            // 启动状态轮询
+                            this.startIpScanPolling(ipAddress);
+                        }
+                    }
+                    
+                    console.log('[IP扫描] 现有结果加载完成，IP数量:', this.discoveredIpAddresses.length);
+                } else {
+                    console.log('[IP扫描] 无现有扫描结果');
+                }
+            } catch (error) {
+                console.warn('[IP扫描] 加载现有结果失败:', error);
+                // 不显示错误消息，静默处理
+            }
+        },
+        
+        // 获取端口类型（用于着色）
+        getPortType(port) {
+            const commonWebPorts = [80, 443, 8080, 8443, 3000, 8000, 9000];
+            const commonDbPorts = [3306, 5432, 1433, 1521, 27017, 6379];
+            const commonSshPorts = [22, 2222];
+            const commonFtpPorts = [21, 20, 990, 989];
+            
+            if (commonWebPorts.includes(port.port)) {
+                return 'success';
+            } else if (commonDbPorts.includes(port.port)) {
+                return 'warning';
+            } else if (commonSshPorts.includes(port.port)) {
+                return 'danger';
+            } else if (commonFtpPorts.includes(port.port)) {
+                return 'info';
+            }
+            return '';
+        },
+        
+        // 查看IP详细信息
+        async viewIpDetails(ipAddress) {
+            try {
+                const response = await this.$axios.get(`/api/scan/ip-results/${ipAddress}`);
+                
+                if (response.data.status === 'success') {
+                    const results = response.data.data;
+                    
+                    // 显示详细信息对话框
+                    this.$msgbox({
+                        title: `IP资产详情 - ${ipAddress}`,
+                        message: this.renderIpDetailsContent(results),
+                        customClass: 'ip-details-dialog',
+                        showCancelButton: false,
+                        confirmButtonText: '关闭'
+                    });
+                } else {
+                    this.$message.warning('暂无详细扫描结果');
+                }
+                
+            } catch (error) {
+                console.error('获取IP详情失败:', error);
+                this.$message.error('获取IP详情失败');
+            }
+        },
+        
+        // 渲染IP详情内容
+        renderIpDetailsContent(results) {
+            const content = [];
+            
+            // 基本信息
+            content.push(this.$createElement('div', { style: { marginBottom: '15px' } }, [
+                this.$createElement('h4', '📊 扫描摘要'),
+                this.$createElement('p', `目标IP: ${results.target_ip}`),
+                this.$createElement('p', `扫描时间: ${results.scan_time || '未知'}`),
+                this.$createElement('p', `开放端口数: ${results.open_ports?.length || 0}`)
+            ]));
+            
+            // 开放端口详情
+            if (results.open_ports && results.open_ports.length > 0) {
+                content.push(this.$createElement('div', { style: { marginBottom: '15px' } }, [
+                    this.$createElement('h4', '🔓 开放端口详情'),
+                    this.$createElement('div', results.open_ports.map(port => 
+                        this.$createElement('p', { style: { fontSize: '13px', margin: '2px 0' } }, 
+                            `${port.port}/${port.protocol} - ${port.service || '未知服务'} ${port.version || ''}`.trim()
+                        )
+                    ))
+                ]));
+            }
+            
+            // 操作系统信息
+            if (results.os_info && results.os_info.name) {
+                content.push(this.$createElement('div', { style: { marginBottom: '15px' } }, [
+                    this.$createElement('h4', '💻 操作系统'),
+                    this.$createElement('p', `${results.os_info.name} (准确度: ${results.os_info.accuracy || '未知'})`)
+                ]));
+            }
+            
+            return this.$createElement('div', content);
+        },
+        
+        // 显示端口详情
+        showPortDetails(ipAddress, port) {
+            const details = [
+                `端口: ${port.port}/${port.protocol}`,
+                `服务: ${port.service || '未知'}`,
+                port.product ? `产品: ${port.product}` : null,
+                port.version ? `版本: ${port.version}` : null,
+                port.extrainfo ? `额外信息: ${port.extrainfo}` : null
+            ].filter(Boolean).join('\n');
+            
+            this.$msgbox({
+                title: `端口详情 - ${ipAddress}:${port.port}`,
+                message: details,
+                type: 'info'
+            });
+        },
+        
+        // 增强的扫描域名方法（支持URL提取）
+        async scanDomainFromUrl(urlOrDomain) {
+            const domain = this.extractDomain(urlOrDomain);
+            if (!domain) {
+                this.$message.warning('无法从该URL提取域名');
+                return;
+            }
+            return this.scanDomain(domain);
+        },
+        
+        // 获取攻击面统计信息
+        getAttackSurfaceStats() {
+            const stats = {
+                basicExpansion: (this.currentLayerData.expand_domains || []).length,
+                fofaDiscovery: this.validFofaTotalCount,
+                contentMining: (this.rawDataFiles.url_body_info || []).length
+            };
+            stats.total = stats.basicExpansion + stats.fofaDiscovery + stats.contentMining;
+            return stats;
+        },
+        
+        // 获取高价值目标列表
+        getHighValueTargets() {
+            const targets = [];
+            
+            // 基础扩展域名（高价值）
+            if (this.currentLayerData.expand_domains) {
+                this.currentLayerData.expand_domains.forEach(domain => {
+                    targets.push({
+                        type: 'basic_expansion',
+                        value: domain,
+                        priority: 'high',
+                        source: '基础扩展发现'
+                    });
+                });
+            }
+            
+            // 内容挖掘发现（中高价值）
+            if (this.rawDataFiles.url_body_info) {
+                this.rawDataFiles.url_body_info.forEach(item => {
+                    targets.push({
+                        type: 'content_mining',
+                        value: item.domain,
+                        priority: 'medium-high',
+                        source: '页面内容挖掘',
+                        sourceUrl: item.source
+                    });
+                });
+            }
+            
+            // FOFA发现（中价值）
+            if (this.rawDataFiles.fofa_data) {
+                this.rawDataFiles.fofa_data.forEach(fofa => {
+                    fofa.domains.forEach(item => {
+                        targets.push({
+                            type: 'fofa_discovery',
+                            value: this.extractDomain(item.url || item),
+                            priority: 'medium',
+                            source: 'FOFA空间引擎',
+                            fingerprint: fofa.file_name
+                        });
+                    });
+                });
+            }
+            
+            return targets;
+        },
+        
+        // 添加到黑名单
+        async addToBlacklist(targetDomain) {
+            if (!targetDomain || targetDomain.trim() === '') {
+                this.$message.warning('请提供有效的域名');
+                return;
+            }
+            
+            const cleanDomain = targetDomain.trim();
+            
+            // 检查是否已在黑名单中
+            if (this.blacklist.includes(cleanDomain)) {
+                this.$message.info(`域名 ${cleanDomain} 已在黑名单中`);
+                return;
+            }
+            
+            try {
+                // 弹出确认对话框
+                await this.$confirm(
+                    `确定要将域名 ${cleanDomain} 添加到黑名单吗？\n\n添加后：\n1. 该域名将被写入 filter_domains-动态.txt\n2. 下次扫描时不会再显示在发现结果中\n3. 但会在黑名单区域显示`,
+                    '确认添加黑名单',
+                    {
+                        confirmButtonText: '确定添加',
+                        cancelButtonText: '取消',
+                        type: 'warning',
+                        dangerouslyUseHTMLString: true
+                    }
+                );
+                
+                // 显示加载提示
+                const loading = this.$loading({
+                    lock: true,
+                    text: `正在将 ${cleanDomain} 添加到黑名单...`,
+                    spinner: 'el-icon-loading',
+                    background: 'rgba(0, 0, 0, 0.7)'
+                });
+                
+                const response = await this.$axios.post(`/api/domain/${this.domain}/blacklist`, {
+                    domain: cleanDomain
+                });
+                
+                loading.close();
+                
+                if (response.data.status === 'success') {
+                    // 添加到本地黑名单
+                    this.blacklist.push(cleanDomain);
+                    
+                    // 从对应的发现结果中移除并加入黑名单列表
+                    this.moveToBlacklistDisplay(cleanDomain);
+                    
+                    this.$message.success(response.data.message || `已将 ${cleanDomain} 添加到黑名单`);
+                    
+                    // 显示成功通知
+                    this.$notify({
+                        title: '黑名单更新成功',
+                        message: `域名 ${cleanDomain} 已添加到黑名单，下次扫描时不会再显示`,
+                        duration: 5000,
+                        type: 'success'
+                    });
+                } else if (response.data.status === 'warning') {
+                    this.$message.warning(response.data.message);
+                } else {
+                    this.$message.error(response.data.message || '添加黑名单失败');
+                }
+            } catch (error) {
+                if (error === 'cancel') {
+                    // 用户取消操作
+                    return;
+                }
+                
+                console.error('添加黑名单失败:', error);
+                if (error.response && error.response.data && error.response.data.message) {
+                    this.$message.error(error.response.data.message);
+                } else {
+                    this.$message.error('添加黑名单失败，请稍后重试');
+                }
+            }
+        },
+        
+        // 从黑名单中移除
+        async removeFromBlacklist(targetDomain) {
+            if (!targetDomain) {
+                this.$message.warning('请提供有效的域名');
+                return;
+            }
+            
+            try {
+                await this.$confirm(
+                    `确定要将域名 ${targetDomain} 从黑名单中移除吗？`,
+                    '确认移除',
+                    {
+                        confirmButtonText: '确定移除',
+                        cancelButtonText: '取消',
+                        type: 'info'
+                    }
+                );
+                
+                const response = await this.$axios.delete(`/api/domain/${this.domain}/blacklist`, {
+                    data: { domain: targetDomain }
+                });
+                
+                if (response.data.status === 'success') {
+                    // 从本地黑名单移除
+                    const index = this.blacklist.indexOf(targetDomain);
+                    if (index > -1) {
+                        this.blacklist.splice(index, 1);
+                    }
+                    
+                    // 从黑名单显示中移除
+                    this.removeFromBlacklistDisplay(targetDomain);
+                    
+                    this.$message.success(response.data.message || `已将 ${targetDomain} 从黑名单中移除`);
+                    
+                    // 刷新数据以显示该域名
+                    this.loadRawData();
+                } else {
+                    this.$message.error(response.data.message || '移除失败');
+                }
+            } catch (error) {
+                if (error === 'cancel') return;
+                
+                console.error('移除黑名单失败:', error);
+                this.$message.error('移除黑名单失败');
+            }
+        },
+        
+        // 将域名移动到黑名单显示区域
+        moveToBlacklistDisplay(domain) {
+            // 从 FOFA 发现中移除
+            if (this.rawDataFiles.fofa_data) {
+                this.rawDataFiles.fofa_data.forEach(fofa => {
+                    fofa.domains = fofa.domains.filter(item => {
+                        const itemDomain = this.extractDomain(item.url || item);
+                        if (itemDomain === domain) {
+                            // 添加到黑名单FOFA列表
+                            if (!this.blacklistedFofaDomains.includes(domain)) {
+                                this.blacklistedFofaDomains.push(domain);
+                            }
+                            return false;
+                        }
+                        return true;
+                    });
+                });
+            }
+            
+            // 从内容挖掘中移除
+            if (this.rawDataFiles.url_body_info) {
+                this.rawDataFiles.url_body_info = this.rawDataFiles.url_body_info.filter(item => {
+                    if (item.domain === domain) {
+                        // 添加到黑名单内容列表
+                        if (!this.blacklistedContentDomains.includes(domain)) {
+                            this.blacklistedContentDomains.push(domain);
+                        }
+                        return false;
+                    }
+                    return true;
+                });
+            }
+        },
+        
+        // 从黑名单显示区域移除域名
+        removeFromBlacklistDisplay(domain) {
+            // 从黑名单FOFA列表中移除
+            const fofaIndex = this.blacklistedFofaDomains.indexOf(domain);
+            if (fofaIndex > -1) {
+                this.blacklistedFofaDomains.splice(fofaIndex, 1);
+            }
+            
+            // 从黑名单内容列表中移除
+            const contentIndex = this.blacklistedContentDomains.indexOf(domain);
+            if (contentIndex > -1) {
+                this.blacklistedContentDomains.splice(contentIndex, 1);
+            }
+        },
+        
+        // 判断原始数据部分是否应该显示
+        shouldShowRawDataSection(section) {
+            if (this.activeFilter === null) {
+                // 显示全部模式：显示所有部分
+                return true;
+            }
+            
+            // 根据过滤器显示对应部分，但保留关键信息
+            switch(this.activeFilter) {
+                case 'urls':
+                    return section === 'basic' || section === 'technical'; // URLs过滤时显示基础信息和技术信息
+                case 'ports':
+                    return section === 'ports' || section === 'technical' || section === 'basic'; // 端口过滤时显示端口、技术信息和基础信息
+                case 'domains':
+                    return section === 'fofa' || section === 'content' || section === 'basic'; // 域名过滤时显示FOFA、内容挖掘和基础信息
+                case 'vulns':
+                    return section === 'vulns' || section === 'basic'; // 漏洞过滤时显示漏洞信息和基础信息
+                default:
+                    return true; // 默认显示所有内容
+            }
+        },
+        
+        // 获取过滤器标签
+        getFilterLabel(filter) {
+            const labels = {
+                'urls': 'URL发现',
+                'ports': 'IP/端口',
+                'domains': '扩展域名',
+                'vulns': '漏洞发现'
+            };
+            return labels[filter] || filter;
+        },
+        
+        // 重新处理重复检测（用于新数据加载后）
+        reprocessDuplicateDetection() {
+            // 清空之前的重复检测结果
+            this.duplicateFofaDomains = [];
+            this.duplicateContentDomains = [];
+            this.duplicateBaseDomains = [];
+            
+            // 重新提取已发现的URL域名
+            this.extractDiscoveredUrlDomains();
+            
+            // 重新检测重复域名
+            this.detectAndHandleDuplicateDomains();
+            
+            console.log('重复检测已重新处理');
+        },
+        
+        // 获取攻击面总统计（包含重复和黑名单）
+        getFullAttackSurfaceStats() {
+            const stats = {
+                basicExpansion: 0,
+                fofaDiscovery: 0,
+                contentMining: 0,
+                duplicateDomains: this.filteredDuplicateDomains.length,
+                blacklistedDomains: this.filteredBlacklistedDomains.length
+            };
+            
+            // 基础扩展域名
+            Object.values(this.domainData.layers).forEach(layer => {
+                stats.basicExpansion += (layer.expand_domains || []).length;
+            });
+            
+            // FOFA发现（过滤后）
+            stats.fofaDiscovery = this.validFofaTotalCount;
+            
+            // 内容挖掘（过滤后）
+            if (this.rawDataFiles.url_body_info) {
+                stats.contentMining = this.rawDataFiles.url_body_info.length;
+            }
+            
+            stats.activeTotal = stats.basicExpansion + stats.fofaDiscovery + stats.contentMining;
+            stats.grandTotal = stats.activeTotal + stats.duplicateDomains + stats.blacklistedDomains;
+            
+            return stats;
+        }
+    }
+});
+
+// 全局函数供onclick调用
+function filterUrls() {
+    window.vueApp.filterContent('urls');
+}
+
+function filterIps() {
+    window.vueApp.filterContent('ips');
+}
+
+function filterDomains() {
+    window.vueApp.filterContent('domains');
+}
+
+function filterPorts() {
+    window.vueApp.filterContent('ports');
+}
+
+function filterVulns() {
+    window.vueApp.filterContent('vulns');
+}
+
+function filterAll() {
+    window.vueApp.filterContent('all');
+}
+</script>
+{% endblock %}

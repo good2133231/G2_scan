@@ -4,10 +4,18 @@
 
 set -e
 
+
+
 # 解析参数
 USE_TEST_MODE=false
 SCAN_LEVEL=1  # 默认一层扫描
 UNLIMITED_SCAN=false  # 无限扫描模式
+
+# 检查环境变量
+if [ "${TEST_MODE:-}" = "1" ]; then
+    USE_TEST_MODE=true
+    echo "🔧 检测到TEST_MODE环境变量，启用测试模式"
+fi
 
 # 处理命令行参数
 while [[ $# -gt 0 ]]; do
@@ -67,10 +75,11 @@ execute_multi_layer_scan() {
         echo "🔄 自动执行第${current_layer}层扫描..." | tee -a "$LOG_FILE"
         
         # 执行当前层扫描
+        echo "📝 执行: 第${current_layer}层扩展扫描" | tee -a "$LOG_FILE"
         if [ "$USE_TEST_MODE" = true ]; then
-            ./expand.sh "$TARGET_DOMAIN" run --test --layer "$current_layer"
+            python3 scripts/management/expansion_processor.py "$TARGET_DOMAIN" --test --layer "$current_layer"
         else
-            ./expand.sh "$TARGET_DOMAIN" run --layer "$current_layer"
+            python3 scripts/management/expansion_processor.py "$TARGET_DOMAIN" --layer "$current_layer"
         fi
         
         # 检查扫描结果
@@ -79,14 +88,35 @@ execute_multi_layer_scan() {
             break
         fi
         
-        # 等待扫描完成并收集扩展目标
+        # 执行生成的扫描任务
+        EXPANSION_TASKS_DIR="output/$TARGET_DOMAIN/expansion/tasks"
+        if [ -f "$EXPANSION_TASKS_DIR/run_all_expansions.sh" ]; then
+            echo "🚀 执行第${current_layer}层扫描任务..." | tee -a "$LOG_FILE"
+            cd "$EXPANSION_TASKS_DIR"
+            chmod +x run_all_expansions.sh
+            ./run_all_expansions.sh | tee -a "$LOG_FILE"
+            cd - > /dev/null
+        else
+            echo "⚠️  未找到扫描任务脚本" | tee -a "$LOG_FILE"
+        fi
+        
+        # 等待扫描完成
+        sleep 2
+        
+        # 调用合并结果脚本
+        echo "🔄 合并第${current_layer}层扫描结果..." | tee -a "$LOG_FILE"
+        python3 scripts/management/merge_layer_results.py "$TARGET_DOMAIN" --layer "$current_layer"
+        
+        # 等待合并完成
         sleep 2
         
         # 确定目标目录
         if [ $current_layer -eq 2 ]; then
-            LAYER_TARGETS_DIR="output/$TARGET_DOMAIN/expansion/layer2/merged_targets"
+            # 二层保持原有结构
+            LAYER_TARGETS_DIR="output/$TARGET_DOMAIN/expansion/report/merged_targets"
         else
-            LAYER_TARGETS_DIR="output/$TARGET_DOMAIN/expansion/layer${current_layer}/merged_targets"
+            # 三层及以上使用新结构
+            LAYER_TARGETS_DIR="output/$TARGET_DOMAIN/expansion/layer${current_layer}/report/merged_targets"
         fi
         
         # 统计扩展目标
@@ -220,10 +250,27 @@ for tool in subfinder puredns httpx; do
     fi
 done
 
-echo "🚀 开始一层扫描流程..."
+# 检查是否需要执行一层扫描
+SKIP_LAYER1=false
+if [ "$SCAN_LEVEL" -ge 2 ]; then
+    # 检查是否已有一层扫描结果
+    if [ -f "output/$TARGET_DOMAIN/finish.txt" ] && [ -d "output/$TARGET_DOMAIN/tuozhan/all_tuozhan" ]; then
+        echo "✅ 检测到已完成的一层扫描结果，跳过一层扫描" | tee -a "$LOG_FILE"
+        SKIP_LAYER1=true
+    else
+        echo "ℹ️  未检测到一层扫描结果，将先执行一层扫描" | tee -a "$LOG_FILE"
+    fi
+fi
 
-# 1. 子域名收集
+if [ "$SKIP_LAYER1" = false ]; then
+    echo "🚀 开始一层扫描流程..."
+    
+    # 初始化扫描状态
+    "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "subdomain_discovery" "pending"
+    
+    # 1. 子域名收集
 echo "📡 步骤1: 子域名收集..."
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "subdomain_discovery" "in_progress" "10" "开始使用subfinder收集子域名"
 if [ "$USE_TEST_MODE" = true ]; then
     CMD="$TOOLS_DIR/subfinder -dL $TARGET_FILE -t 20 -o $TEMP_DIR/passive.txt"
     log_command "$CMD" "子域名被动收集(测试模式)"
@@ -237,10 +284,14 @@ fi
 # 检查结果
 if ! check_file_result "$TEMP_DIR/passive.txt" "子域名收集"; then
     echo "❌ 子域名收集失败，请检查网络连接和目标域名" | tee -a "$LOG_FILE"
+    "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "subdomain_discovery" "failed" "0" "子域名收集失败"
     if [ "$USE_TEST_MODE" != true ]; then
         exit 1
     fi
 fi
+
+# 更新子域名收集进度
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "subdomain_discovery" "in_progress" "50" "被动收集完成，开始爆破"
 
 # 2. 子域名爆破
 echo "💥 步骤2: 子域名爆破..."
@@ -275,11 +326,17 @@ cat "$TEMP_DIR/passive.txt" "$TEMP_DIR/brute.txt" 2>/dev/null | sort -u > "$TEMP
 # 检查合并结果
 if ! check_file_result "$TEMP_DIR/domain_life" "合并去重"; then
     echo "❌ 合并去重失败，没有发现任何子域名" | tee -a "$LOG_FILE"
+    "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "subdomain_discovery" "failed" "0" "没有发现任何子域名"
     exit 1
 fi
 
+# 统计子域名数量
+subdomain_count=$(wc -l < "$TEMP_DIR/domain_life")
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "subdomain_discovery" "completed" "100" "发现了${subdomain_count}个子域名"
+
 # 4. 域名解析验证
 echo "🔍 步骤4: 域名解析验证..."
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "http_probe" "in_progress" "10" "开始域名解析验证"
 CMD="$TOOLS_DIR/puredns resolve $TEMP_DIR/domain_life -r $CONFIG_DIR/resolvers.txt --wildcard-tests 50 --wildcard-batch 1000000 -q -w $TEMP_DIR/httpx_url"
 log_command "$CMD" "域名解析验证"
 $TOOLS_DIR/puredns resolve "$TEMP_DIR/domain_life" \
@@ -299,6 +356,7 @@ fi
 
 # 5. HTTP探测
 echo "🌐 步骤5: HTTP探测..."
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "http_probe" "in_progress" "50" "开始HTTP/HTTPS服务探测"
 if [ "$USE_TEST_MODE" = true ]; then
     CMD="$TOOLS_DIR/httpx -l $TEMP_DIR/httpx_url -mc 200,301,302,403,404 -timeout 2 -favicon -hash md5,mmh3 -retries 1 -t 50 -rl 1000 -resume -extract-fqdn -tls-grab -json -o $TEMP_DIR/result_all.json"
     log_command "$CMD" "HTTP探测(测试模式-50线程)"
@@ -320,13 +378,18 @@ fi
 # 检查HTTP探测结果
 if ! check_file_result "$TEMP_DIR/result_all.json" "HTTP探测"; then
     echo "❌ HTTP探测失败，没有发现HTTP服务" | tee -a "$LOG_FILE"
+    "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "http_probe" "failed" "0" "HTTP探测失败"
     if [ "$USE_TEST_MODE" != true ]; then
         exit 1
     fi
 fi
 
+# HTTP探测完成
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "http_probe" "completed" "100" "HTTP探测完成"
+
 # 6. 数据处理和漏洞扫描
 echo "📊 步骤6: 数据处理和漏洞扫描..."
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "expand_scan" "in_progress" "10" "开始分析数据和发现扩展资产"
 cd "$PROJECT_ROOT"
 
 if [ "$USE_TEST_MODE" = true ]; then
@@ -346,8 +409,38 @@ RESULT_DIR="$OUTPUT_DIR/$TARGET_DOMAIN"
 if [ -d "$RESULT_DIR" ]; then
     echo "✅ 数据处理完成，结果已生成" | tee -a "$LOG_FILE"
     ls -la "$RESULT_DIR" | tee -a "$LOG_FILE"
+    "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "expand_scan" "completed" "100" "扩展资产发现完成"
+    
+    # 开始安全扫描
+    if [ "$USE_TEST_MODE" != true ]; then
+        echo "🔍 开始安全扫描..." | tee -a "$LOG_FILE"
+        
+        # 端口扫描
+        if [ -f "$RESULT_DIR/tuozhan/all_tuozhan/ips.txt" ] && [ -s "$RESULT_DIR/tuozhan/all_tuozhan/ips.txt" ]; then
+            "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "port_scan" "in_progress" "10" "开始端口扫描"
+            echo "🔍 执行Fscan端口扫描..." | tee -a "$LOG_FILE"
+            "$TOOLS_DIR/fscan" -hf "$RESULT_DIR/tuozhan/all_tuozhan/ips.txt" -o "$RESULT_DIR/fscan_result_$TARGET_DOMAIN.txt" 2>&1 | tee -a "$LOG_FILE"
+            "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "port_scan" "completed" "100" "端口扫描完成"
+        else
+            "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "port_scan" "completed" "100" "无IP需要扫描"
+        fi
+        
+        # 漏洞扫描
+        if [ -f "$RESULT_DIR/input/representative_urls.txt" ] && [ -s "$RESULT_DIR/input/representative_urls.txt" ]; then
+            "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "vulnerability_scan" "in_progress" "10" "开始漏洞扫描"
+            echo "🔍 执行Afrog漏洞扫描..." | tee -a "$LOG_FILE"
+            "$TOOLS_DIR/afrog" -T "$RESULT_DIR/input/representative_urls.txt" -o "$RESULT_DIR/afrog_report_$TARGET_DOMAIN.json" -disable-poc-update 2>&1 | tee -a "$LOG_FILE"
+            "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "vulnerability_scan" "completed" "100" "漏洞扫描完成"
+        else
+            "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "vulnerability_scan" "completed" "100" "无URL需要扫描"
+        fi
+    else
+        "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "port_scan" "completed" "100" "测试模式跳过"
+        "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "vulnerability_scan" "completed" "100" "测试模式跳过"
+    fi
 else
     echo "⚠️  警告: 未生成结果目录，请检查start.py执行情况" | tee -a "$LOG_FILE"
+    "$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "expand_scan" "failed" "0" "数据处理失败"
 fi
 
 # 7. 清理临时文件
@@ -355,6 +448,8 @@ echo "🧹 清理临时文件..."
 find "$TEMP_DIR" -name "*.txt" -delete 2>/dev/null || true
 find "$TEMP_DIR" -name "*.json" -delete 2>/dev/null || true
 
+# 生成报告
+"$SCRIPTS_DIR/utils/update_scan_status.sh" "$TARGET_DOMAIN" "report_generation" "completed" "100" "一层扫描完成"
 echo "✅ 一层扫描完成！" | tee -a "$LOG_FILE"
 echo "📂 查看结果: ls -la $OUTPUT_DIR/$TARGET_DOMAIN/"
 echo "📝 详细日志: $LOG_FILE"
@@ -440,6 +535,42 @@ echo "目标域名: $TARGET_DOMAIN" >> "$LOG_FILE"
 echo "输出目录: $OUTPUT_DIR/$TARGET_DOMAIN" >> "$LOG_FILE"
 echo "日志文件: $LOG_FILE" >> "$LOG_FILE"
 echo "========================================" >> "$LOG_FILE"
+
+fi  # 结束 SKIP_LAYER1 判断
+
+# 如果跳过了一层扫描，直接执行多层扫描
+if [ "$SKIP_LAYER1" = true ] && [ "$SCAN_LEVEL" -ge 2 ]; then
+    # 检查扩展目标
+    TARGETS_DIR="output/$TARGET_DOMAIN/tuozhan/all_tuozhan"
+    if [ -d "$TARGETS_DIR" ]; then
+        echo "🔍 检查一层扫描的扩展目标..."
+        IP_COUNT=0
+        URL_COUNT=0
+        DOMAIN_COUNT=0
+        
+        if [ -f "$TARGETS_DIR/ip.txt" ]; then
+            IP_COUNT=$(grep -v "^#" "$TARGETS_DIR/ip.txt" 2>/dev/null | wc -l || echo "0")
+        fi
+        if [ -f "$TARGETS_DIR/urls.txt" ]; then
+            URL_COUNT=$(grep -v "^#" "$TARGETS_DIR/urls.txt" 2>/dev/null | wc -l || echo "0")
+        fi
+        if [ -f "$TARGETS_DIR/root_domains.txt" ]; then
+            DOMAIN_COUNT=$(grep -v "^#" "$TARGETS_DIR/root_domains.txt" 2>/dev/null | wc -l || echo "0")
+        fi
+        
+        TOTAL_TARGETS=$((IP_COUNT + URL_COUNT + DOMAIN_COUNT))
+        
+        if [ $TOTAL_TARGETS -gt 0 ]; then
+            echo "🔄 发现一层扫描的扩展目标:"
+            echo "   IP目标: $IP_COUNT 个"
+            echo "   URL目标: $URL_COUNT 个"
+            echo "   域名目标: $DOMAIN_COUNT 个"
+            execute_multi_layer_scan
+        else
+            echo "ℹ️  一层扫描未发现扩展目标，无需执行多层扫描"
+        fi
+    fi
+fi
 
 echo "🎉 扫描流程完成！"
 echo "📝 完整日志已保存至: $LOG_FILE"

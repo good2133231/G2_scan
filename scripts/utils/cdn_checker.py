@@ -163,7 +163,7 @@ def filter_ips_from_file(input_file, output_file, cdn_ranges, verbose=False):
     # 写入过滤后的结果
     with open(output_file, 'w') as f:
         for line in filtered_ips:
-            f.write(f"{line}\\n")
+            f.write(f"{line}\n")
     
     print(f"[*] CDN过滤完成:")
     print(f"    输入文件: {input_file}")
@@ -172,7 +172,7 @@ def filter_ips_from_file(input_file, output_file, cdn_ranges, verbose=False):
     print(f"    保留IP: {len([l for l in filtered_ips if not l.startswith('#')])})")
     
     if cdn_ips and verbose:
-        print(f"\\n[*] 被过滤的CDN IP详情:")
+        print(f"\n[*] 被过滤的CDN IP详情:")
         for ip, reason, source in cdn_ips:
             print(f"    {ip}: {reason} (来源: {source})")
     
